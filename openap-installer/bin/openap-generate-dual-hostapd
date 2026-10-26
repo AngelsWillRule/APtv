@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""Generate and validate staged OpenAP dual-band hostapd configurations."""
+
+from __future__ import annotations
+
+import argparse
+import configparser
+import json
+import os
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+MAC_RE = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
+ROLE_SECTIONS = ("ap_24ghz", "ap_5ghz")
+
+
+class DraftError(RuntimeError):
+    pass
+
+
+def read_ini(path: Path) -> configparser.ConfigParser:
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.optionxform = str
+    if not path.is_file():
+        raise DraftError(f"Configuration not found: {path}")
+    parser.read(path, encoding="utf-8")
+    return parser
+
+
+def decode_ssid(profile: configparser.ConfigParser) -> str:
+    import base64
+
+    encoded = profile.get("hotspot_draft", "ssid_base64", fallback="")
+    try:
+        ssid = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise DraftError("Invalid encoded SSID in dual-band draft") from exc
+    if not 1 <= len(ssid.encode("utf-8")) <= 32 or any(ord(char) < 32 or ord(char) == 127 for char in ssid):
+        raise DraftError("SSID must contain 1 to 32 bytes without control characters")
+    return ssid
+
+
+def decode_security(profile: configparser.ConfigParser) -> tuple[str | None, str]:
+    import base64
+
+    if not profile.has_option("hotspot_draft", "security"):
+        return None, ""
+    security = profile.get("hotspot_draft", "security", fallback="wpa2")
+    if security not in ("wpa2", "none"):
+        raise DraftError("Invalid security mode in dual-band draft")
+    encoded = profile.get("hotspot_draft", "wpa_passphrase_base64", fallback="")
+    try:
+        passphrase = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise DraftError("Invalid encoded WPA passphrase in dual-band draft") from exc
+    if security == "wpa2" and not 8 <= len(passphrase.encode("utf-8")) <= 63:
+        raise DraftError("WPA passphrase must contain 8 to 63 bytes")
+    if any(ord(char) < 32 or ord(char) == 127 for char in passphrase):
+        raise DraftError("WPA passphrase must not contain control characters")
+    return security, passphrase
+
+
+def int_value(profile: configparser.ConfigParser, section: str, key: str) -> int:
+    raw = profile.get(section, key, fallback="")
+    if not raw.isdigit():
+        raise DraftError(f"Invalid {section}.{key}")
+    return int(raw)
+
+
+def binary_value(profile: configparser.ConfigParser, section: str, key: str) -> int:
+    raw = profile.get(section, key, fallback="0")
+    if raw not in ("0", "1"):
+        raise DraftError(f"Invalid {section}.{key}")
+    return int(raw)
+
+
+def validate_draft(profile: configparser.ConfigParser) -> dict[str, Any]:
+    identities = {
+        role: value for role in ROLE_SECTIONS
+        if (value := profile.get("draft", role, fallback="").lower())
+    }
+    if not identities:
+        raise DraftError("At least one AP role identity must be configured")
+    if any(not MAC_RE.fullmatch(value) or value == "00:00:00:00:00:00" for value in identities.values()):
+        raise DraftError("Every configured AP role identity must be valid")
+    if len(set(identities.values())) != len(identities):
+        raise DraftError("The two AP roles must use different radios")
+    uplink = profile.get("draft", "uplink", fallback="").lower()
+    if uplink:
+        if not MAC_RE.fullmatch(uplink) or uplink == "00:00:00:00:00:00":
+            raise DraftError("The uplink role identity must be valid")
+        if uplink in identities.values():
+            raise DraftError("The uplink and AP roles must use different radios")
+        identities["uplink"] = uplink
+    security, passphrase = decode_security(profile)
+    settings: dict[str, Any] = {
+        "ssid": decode_ssid(profile),
+        "ap_isolate": binary_value(profile, "hotspot_draft", "ap_isolate"),
+        "ignore_broadcast_ssid": binary_value(profile, "hotspot_draft", "ignore_broadcast_ssid"),
+    }
+    if security is not None:
+        settings["security"] = security
+        settings["wpa_passphrase"] = passphrase
+    for role in ROLE_SECTIONS:
+        if role not in identities:
+            continue
+        section = f"{role}_draft"
+        settings[role] = {
+            "channel": int_value(profile, section, "channel"),
+            "width": int_value(profile, section, "width"),
+            "txpower": int_value(profile, section, "txpower"),
+        }
+    if "ap_24ghz" in settings and (not 1 <= settings["ap_24ghz"]["channel"] <= 14 or settings["ap_24ghz"]["width"] not in (20, 40)):
+        raise DraftError("Invalid 2.4 GHz channel or width")
+    if "ap_5ghz" in settings and (not 32 <= settings["ap_5ghz"]["channel"] <= 177 or settings["ap_5ghz"]["width"] not in (20, 40, 80)):
+        raise DraftError("Invalid 5 GHz channel or width")
+    if any(not 1 <= settings[role]["txpower"] <= 40 for role in ROLE_SECTIONS if role in settings):
+        raise DraftError("Invalid transmit power")
+    settings["identities"] = identities
+    return settings
+
+
+def load_inventory(path: Path | None) -> dict[str, Any]:
+    if path:
+        return json.loads(path.read_text(encoding="utf-8"))
+    proc = subprocess.run(
+        ["/usr/local/sbin/openap-detect", "--json"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=20,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise DraftError("Unable to read wireless inventory")
+    return json.loads(proc.stdout)
+
+
+def resolve_radios(inventory: dict[str, Any], identities: dict[str, str]) -> dict[str, dict[str, Any]]:
+    radios = {}
+    for radio in inventory.get("interfaces", []):
+        if not radio.get("is_wireless"):
+            continue
+        for key in ("identity_mac", "permanent_mac", "mac"):
+            identity = str(radio.get(key, "")).lower()
+            if identity:
+                radios[identity] = radio
+    resolved = {}
+    for role, identity in identities.items():
+        radio = radios.get(identity)
+        if not radio:
+            raise DraftError(f"Assigned {role} radio is not present")
+        if role == "uplink":
+            if not radio.get("supports_managed"):
+                raise DraftError("Assigned uplink radio does not support managed mode")
+            resolved[role] = radio
+            continue
+        if not radio.get("supports_ap"):
+            raise DraftError(f"Assigned {role} radio does not support AP mode")
+        band_key = "supports_24ghz" if role == "ap_24ghz" else "supports_5ghz"
+        if not radio.get(band_key):
+            raise DraftError(f"Assigned {role} radio does not support its band")
+        resolved[role] = radio
+    return resolved
+
+
+def validate_radio_settings(resolved: dict[str, dict[str, Any]], settings: dict[str, Any]) -> None:
+    for role in ROLE_SECTIONS:
+        if role not in resolved or role not in settings:
+            continue
+        configured = settings[role]
+        channels = [item for item in resolved[role].get("channels", []) if item.get("selectable", not item.get("no_ir"))]
+        if not channels:
+            continue
+        selected = next((item for item in channels if int(item.get("channel", 0)) == configured["channel"]), None)
+        if not selected:
+            raise DraftError(f"Channel {configured['channel']} is not available on the assigned {role} radio")
+        if configured["txpower"] > int(selected.get("max_dbm", 0)):
+            raise DraftError(
+                f"Transmit power {configured['txpower']} dBm exceeds the {selected.get('max_dbm')} dBm channel limit"
+            )
+
+
+def replace_values(base: str, values: dict[str, str], remove: set[str]) -> str:
+    output = []
+    seen = set()
+    for line in base.splitlines():
+        match = re.match(r"^([A-Za-z0-9_]+)=", line)
+        if not match:
+            output.append(line)
+            continue
+        key = match.group(1)
+        if key in remove:
+            continue
+        if key in values:
+            if key not in seen:
+                output.append(f"{key}={values[key]}")
+                seen.add(key)
+            continue
+        output.append(line)
+    for key, value in values.items():
+        if key not in seen:
+            output.append(f"{key}={value}")
+    return "\n".join(output).rstrip() + "\n"
+
+
+def five_ghz_center(channel: int, width: int) -> int:
+    if width == 20:
+        return channel
+    blocks = ([36, 40, 44, 48], [52, 56, 60, 64], [100, 104, 108, 112],
+              [116, 120, 124, 128], [132, 136, 140, 144], [149, 153, 157, 161])
+    for block in blocks:
+        if channel in block:
+            if width == 80:
+                return block[0] + 6
+            pair_start = block[0] if channel in block[:2] else block[2]
+            return pair_start + 2
+    raise DraftError(f"Channel {channel} is not valid for {width} MHz")
+
+
+def build_config(base: str, role: str, radio: dict[str, Any], settings: dict[str, Any]) -> str:
+    band = settings[role]
+    values = {
+        "interface": str(radio["name"]),
+        "ssid": settings["ssid"],
+        "channel": str(band["channel"]),
+        "ieee80211n": "1",
+        "wmm_enabled": "1",
+        "ap_isolate": str(settings.get("ap_isolate", 0)),
+        "ignore_broadcast_ssid": str(settings.get("ignore_broadcast_ssid", 0)),
+    }
+    remove = {"ieee80211ac", "ht_capab", "vht_oper_chwidth", "vht_oper_centr_freq_seg0_idx"}
+    security_keys = {"wpa", "wpa_key_mgmt", "wpa_passphrase", "wpa_psk", "wpa_pairwise", "rsn_pairwise"}
+    security = settings.get("security")
+    if security == "none":
+        remove.update(security_keys)
+        values["auth_algs"] = "1"
+    elif security == "wpa2":
+        values.update({
+            "auth_algs": "1",
+            "wpa": "2",
+            "wpa_key_mgmt": "WPA-PSK",
+            "wpa_passphrase": settings["wpa_passphrase"],
+            "rsn_pairwise": "CCMP",
+        })
+        remove.update({"wpa_psk", "wpa_pairwise"})
+    if role == "ap_24ghz":
+        values["hw_mode"] = "g"
+        if band["width"] == 40:
+            values["ht_capab"] = "[HT40+]" if band["channel"] <= 7 else "[HT40-]"
+    else:
+        values["hw_mode"] = "a"
+        values["ieee80211ac"] = "1"
+        if band["width"] >= 40:
+            values["ht_capab"] = "[HT40+]" if band["channel"] % 8 == 4 else "[HT40-]"
+            values["vht_oper_chwidth"] = "1" if band["width"] == 80 else "0"
+            values["vht_oper_centr_freq_seg0_idx"] = str(five_ghz_center(band["channel"], band["width"]))
+    return replace_values(base, values, remove)
+
+
+def atomic_write(path: Path, contents: str) -> None:
+    if path.exists():
+        raise DraftError(f"Refusing to overwrite staging file: {path}")
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(contents)
+        os.chmod(temporary, 0o640)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--roles", type=Path, default=Path("/etc/openap/wifi-roles.ini"))
+    parser.add_argument("--base", type=Path, default=Path("/etc/hostapd/hostapd.conf"))
+    parser.add_argument("--inventory-json", type=Path)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    args = parser.parse_args()
+    try:
+        settings = validate_draft(read_ini(args.roles))
+        resolved = resolve_radios(load_inventory(args.inventory_json), settings["identities"])
+        validate_radio_settings(resolved, settings)
+        base = args.base.read_text(encoding="utf-8")
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        generated = {}
+        for role in ROLE_SECTIONS:
+            if role not in settings:
+                continue
+            path = args.output_dir / ("ap-24ghz.conf" if role == "ap_24ghz" else "ap-5ghz.conf")
+            atomic_write(path, build_config(base, role, resolved[role], settings))
+            generated[role] = {"path": str(path), "interface": resolved[role]["name"], **settings[role]}
+        manifest = {
+            "schema": "openap-hotspot/v2",
+            "ssid": settings["ssid"],
+            "generated": generated,
+            "uplink_interface": resolved.get("uplink", {}).get("name", ""),
+        }
+        atomic_write(args.output_dir / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        print(json.dumps({"success": True, "output_dir": str(args.output_dir), "interfaces": [item["interface"] for item in generated.values()]}))
+        return 0
+    except (DraftError, OSError, configparser.Error, json.JSONDecodeError) as exc:
+        print(f"openap-generate-dual-hostapd: {exc}", file=os.sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

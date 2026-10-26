@@ -1,0 +1,889 @@
+#!/bin/sh
+set -eu
+
+action="${1:---validate-only}"
+roles="${OPENAP_WIFI_ROLES:-/etc/openap/wifi-roles.ini}"
+base="${OPENAP_HOSTAPD_BASE:-/etc/hostapd/hostapd.conf}"
+generator="${OPENAP_DUAL_HOSTAPD_GENERATOR:-/usr/local/sbin/openap-generate-dual-hostapd}"
+profile="/etc/openap/repeater.ini"
+bridge="openap0"
+hostapd24="/etc/hostapd/openap-ap-24ghz.conf"
+hostapd5="/etc/hostapd/openap-ap-5ghz.conf"
+hostapd_override="/etc/systemd/system/hostapd.service.d/40-openap-dual-band.conf"
+bridge_netdev="/etc/systemd/network/15-openap-hotspot.netdev"
+bridge_network="/etc/systemd/network/20-openap-hotspot.network"
+dnsmasq_conf="/etc/dnsmasq.d/openap-repeater.conf"
+firewall_conf="/etc/openap/networking/openap.nft"
+radio_reset_helper="/usr/local/sbin/openap-reset-ap-radio"
+
+fail() {
+  reason="$1"
+  if [ "$action" = --apply ]; then
+    mkdir -p /run/openap
+    printf '%s\n' failed > /run/openap/dual-hostapd-apply.state
+    printf '%s\n' "$reason" > /run/openap/dual-hostapd-apply.error
+  fi
+  echo "openap-apply-dual-hostapd: $reason" >&2
+  exit 1
+}
+ini_value() { awk -F ' *= *' -v key="$1" '$1 == key {print $2; exit}' "$profile" 2>/dev/null || true; }
+
+case "$action" in
+  --validate-only|--apply|--apply-delayed) ;;
+  *) fail "Usage: openap-apply-dual-hostapd [--validate-only|--apply|--apply-delayed]" ;;
+esac
+[ "$(id -u)" -eq 0 ] || fail "This command must run as root"
+[ "$action" != --apply-delayed ] || {
+  mkdir -p /run/openap
+  exec 9>/run/openap/dual-hostapd-apply.lock
+  flock -n 9 || fail "Another dual-band apply request is being scheduled"
+  current_state="$(cat /run/openap/dual-hostapd-apply.state 2>/dev/null || true)"
+  [ "$current_state" != scheduled ] && [ "$current_state" != applying ] \
+    || fail "A dual-band apply operation is already running"
+  rm -f /run/openap/dual-hostapd-apply.error
+  printf '%s\n' scheduled > /run/openap/dual-hostapd-apply.state
+  unit="openap-dual-hostapd-apply-$(date +%s)"
+  if ! systemd-run --quiet --unit="$unit" --on-active=2s /usr/local/sbin/openap-apply-dual-hostapd --apply; then
+    printf '%s\n' failed > /run/openap/dual-hostapd-apply.state
+    fail "Unable to schedule dual-band apply"
+  fi
+  echo "Dual-band apply scheduled"
+  exit 0
+}
+[ -x "$generator" ] || fail "Generator not found: $generator"
+[ -r "$roles" ] || fail "Role draft not found: $roles"
+[ -r "$base" ] || fail "Base hostapd configuration not found: $base"
+[ -r "$profile" ] || fail "OpenAP profile not found: $profile"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+command -v hostapd_cli >/dev/null 2>&1 || fail "hostapd_cli is required"
+
+work_dir="$(mktemp -d /run/openap-dual-hostapd.XXXXXX)"
+case "$work_dir" in /run/openap-dual-hostapd.*) ;; *) fail "Unexpected temporary path" ;; esac
+cleanup() { rm -rf -- "$work_dir"; }
+trap cleanup EXIT HUP INT TERM
+
+"$generator" --roles "$roles" --base "$base" --output-dir "$work_dir/generated" >/dev/null
+manifest="$work_dir/generated/manifest.json"
+ap24="$(jq -r '.generated.ap_24ghz.interface // ""' "$manifest")"
+ap5="$(jq -r '.generated.ap_5ghz.interface // ""' "$manifest")"
+uplink="$(jq -r '.uplink_interface // ""' "$manifest")"
+tx24="$(jq -r '.generated.ap_24ghz.txpower // ""' "$manifest")"
+tx5="$(jq -r '.generated.ap_5ghz.txpower // ""' "$manifest")"
+ap_interfaces="$(jq -r '.generated[].interface' "$manifest")"
+[ -n "$ap_interfaces" ] || fail "At least one AP interface is required"
+for iface in $ap_interfaces; do
+  case "$iface" in ''|null|lo|*[!A-Za-z0-9_.:-]*) fail "Invalid generated AP interface" ;; esac
+  [ -d "/sys/class/net/$iface" ] || fail "Generated AP interface is absent: $iface"
+done
+[ -z "$ap24" ] || [ -z "$ap5" ] || [ "$ap24" != "$ap5" ] || fail "The AP interfaces must differ"
+for iface in $ap_interfaces; do [ -z "$uplink" ] || [ "$uplink" != "$iface" ] || fail "Uplink collides with an AP interface"; done
+case "$tx24$tx5" in ''|*[!0-9]*) fail "Invalid generated transmit power" ;; esac
+
+gateway="$(ini_value gateway)"
+subnet="$(ini_value subnet)"
+hotspot_prefix="${subnet#*/}"
+dhcp_start="$(ini_value dhcp_start)"
+dhcp_end="$(ini_value dhcp_end)"
+ethernet="$(ini_value ethernet_physical)"
+[ -n "$ethernet" ] || ethernet="$(ini_value ethernet)"
+current_mode="$(ini_value current)"
+current_uplink="$(ini_value uplink)"
+current_ap24="$(ini_value ap_24ghz)"
+current_ap5="$(ini_value ap_5ghz)"
+current_bridge="$(ini_value bridge)"
+address_backend="$(ini_value address_backend)"
+[ -n "$address_backend" ] || address_backend=systemd-networkd
+raspberry_native=0
+if [ -r /proc/device-tree/model ] \
+  && tr -d '\0' < /proc/device-tree/model | grep -Fqi 'Raspberry Pi'; then
+  raspberry_native=1
+fi
+native_dual_bridge=0
+if [ "$raspberry_native" -eq 1 ] \
+  && [ "$address_backend" = openap-ap-address ] \
+  && [ -n "$ap24" ] && [ -n "$ap5" ]; then
+  native_dual_bridge=1
+fi
+[ -n "$current_ap24$current_ap5" ] || current_ap24="$(ini_value ap)"
+[ "$current_mode" != ap_ethernet_bridge ] || bridge=br0
+[ -z "$current_bridge" ] || bridge="$current_bridge"
+case "$gateway" in ''|*[!0-9.]*) fail "Invalid hotspot gateway" ;; esac
+case "$subnet" in ''|*[!0-9./]*) fail "Invalid hotspot subnet" ;; esac
+nat_uplink="$ethernet"
+uplink_description="Ethernet uplink: $ethernet"
+if [ "$current_mode" = repeater_wifi ]; then
+  case "$uplink" in ''|null|lo|*[!A-Za-z0-9_.:-]*) fail "Invalid active Wi-Fi UPLINK interface" ;; esac
+  [ -e "/sys/class/net/$uplink" ] || fail "Active Wi-Fi UPLINK is absent: $uplink"
+  iw dev 2>/dev/null | awk '$1 == "Interface" {print $2}' | grep -Fxq "$uplink" \
+    || fail "Active UPLINK is not a Wi-Fi interface"
+  if [ "$uplink" != "$current_uplink" ]; then
+    [ "$action" = --apply ] || fail "Changing the active Wi-Fi UPLINK requires apply mode"
+  else
+    ip -4 -o address show dev "$uplink" | grep -q ' inet ' \
+      || fail "Active Wi-Fi UPLINK has no IPv4 address"
+  fi
+  nat_uplink="$uplink"
+  uplink_description="Wi-Fi uplink: $uplink"
+else
+  case "$ethernet" in ''|lo|*[!A-Za-z0-9_.:-]*) fail "Invalid Ethernet interface" ;; esac
+  [ -e "/sys/class/net/$ethernet" ] || fail "Ethernet interface is absent: $ethernet"
+  [ "$(cat "/sys/class/net/$ethernet/carrier" 2>/dev/null || true)" = 1 ] || fail "Ethernet carrier is down"
+  address_interface="$ethernet"
+  [ "$current_mode" != ap_ethernet_bridge ] || address_interface=br0
+  ip -4 -o address show dev "$address_interface" | grep -q ' inet ' \
+    || fail "Ethernet path has no IPv4 address"
+fi
+
+cold_swap_active=0
+cold_backup_dir=""
+cold_old_uplink=""
+cold_new_uplink=""
+baseline_internet=unknown
+if [ "$current_mode" = repeater_wifi ] \
+  && ping -I "$current_uplink" -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+  baseline_internet=ready
+fi
+
+verify_restored_runtime() {
+  restored_gateway_interface="$bridge"
+  restored_requires_bridge=1
+  if [ "$address_backend" = openap-ap-address ]; then
+    restored_gateway_interface="$current_ap24"
+    [ -n "$restored_gateway_interface" ] || restored_gateway_interface="$current_ap5"
+    # Older Raspberry installations could still have the native AP backend
+    # recorded while the gateway remained on the legacy openap0 bridge. Treat
+    # that as a migratable baseline: verify the gateway where it actually is,
+    # then let the native transaction move it to the selected AP interface.
+    if [ -n "$current_bridge" ] \
+      && [ -d "/sys/class/net/$current_bridge/bridge" ] \
+      && ip -4 -o address show dev "$current_bridge" 2>/dev/null | grep -Fq " $gateway/"; then
+      restored_gateway_interface="$current_bridge"
+    fi
+    restored_requires_bridge=0
+  elif [ "$current_mode" = ap_ethernet ] \
+    && { [ -z "$current_bridge" ] || [ ! -d "/sys/class/net/$current_bridge/bridge" ]; }; then
+    restored_gateway_interface="$current_ap24"
+    [ -n "$restored_gateway_interface" ] || restored_gateway_interface="$current_ap5"
+    restored_requires_bridge=0
+  fi
+  attempts=30
+  while [ "$attempts" -gt 0 ]; do
+    recovery_error=""
+    systemctl is-active --quiet hostapd.service dnsmasq.service openap-firewall.service \
+      || recovery_error="required hotspot service is inactive"
+    ip -4 -o address show dev "$restored_gateway_interface" 2>/dev/null | grep -Fq " $gateway/" \
+      || recovery_error="hotspot gateway is absent from $restored_gateway_interface"
+    for restored_ap in $current_ap24 $current_ap5; do
+      [ -n "$restored_ap" ] || continue
+      hostapd_cli -i "$restored_ap" ping 2>/dev/null | grep -Fxq PONG \
+        || recovery_error="hostapd is not ready on $restored_ap"
+      iw dev "$restored_ap" info 2>/dev/null \
+        | awk '$1 == "type" && $2 == "AP" {found=1} END {exit !found}' \
+        || recovery_error="$restored_ap is not in AP mode"
+      if [ "$restored_requires_bridge" -eq 1 ]; then
+        [ "$(basename "$(readlink -f "/sys/class/net/$restored_ap/master" 2>/dev/null)")" = "$bridge" ] \
+          || recovery_error="$restored_ap is not attached to $bridge"
+      fi
+    done
+    if [ "$current_mode" = repeater_wifi ]; then
+      systemctl is-active --quiet openap-uplink.service \
+        || recovery_error="UPLINK service is inactive"
+      iw dev "$current_uplink" link 2>/dev/null | grep -q '^Connected to ' \
+        || recovery_error="UPLINK is not associated"
+      ip -4 -o address show dev "$current_uplink" 2>/dev/null | grep -q ' inet ' \
+        || recovery_error="UPLINK has no IPv4 address"
+      ip -4 route show default dev "$current_uplink" | grep -q . \
+        || recovery_error="UPLINK has no default route"
+      ip -4 route del default dev "$ethernet" >/dev/null 2>&1 || true
+      ip -4 route get 1.1.1.1 2>/dev/null \
+        | grep -Eq "(^|[[:space:]])dev[[:space:]]+$current_uplink([[:space:]]|$)" \
+        || recovery_error="Internet route does not use $current_uplink"
+      nft list table ip openap_nat 2>/dev/null | grep -Fq "oifname \"$current_uplink\"" \
+        || recovery_error="NAT does not use $current_uplink"
+      if [ "$baseline_internet" = ready ]; then
+        ping -I "$current_uplink" -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 \
+          || recovery_error="UPLINK Internet reachability was not restored"
+      fi
+    else
+      nft list table ip openap_nat 2>/dev/null | grep -Fq "oifname \"$ethernet\"" \
+        || recovery_error="NAT does not use $ethernet"
+    fi
+    [ -n "$recovery_error" ] || return 0
+    attempts=$((attempts - 1))
+    [ "$attempts" -eq 0 ] || sleep 1
+  done
+  printf '%s\n' "$recovery_error"
+  return 1
+}
+
+record_rollback_result() {
+  original_reason="$1"
+  backup="$2"
+  if recovery_output="$(verify_restored_runtime)"; then
+    printf '%s\n' failed > /run/openap/dual-hostapd-apply.state
+    printf '%s\n' "$original_reason" > /run/openap/dual-hostapd-apply.error
+    echo "Hotspot apply failed: $original_reason; previous configuration verified from $backup" >&2
+  else
+    printf '%s\n' rollback_failed > /run/openap/dual-hostapd-apply.state
+    printf '%s\n' "$original_reason; rollback verification failed: $recovery_output" \
+      > /run/openap/dual-hostapd-apply.error
+    echo "Hotspot apply and rollback failed: $original_reason; $recovery_output; backup: $backup" >&2
+  fi
+}
+
+if [ "$action" = --apply ] && [ "$current_mode" != ap_ethernet_bridge ]; then
+  # A clean installation starts with a legacy single-interface hotspot and no
+  # hotspot bridge.  That is a valid baseline: openap0 is created later by the
+  # dual-band transaction.  Only repair membership when the active baseline
+  # already requires a bridge.
+  baseline_requires_bridge=1
+  if [ "$address_backend" = openap-ap-address ]; then
+    # Raspberry native AP-address mode owns the gateway directly on the radio.
+    # There is no openap0 member to repair before applying new credentials.
+    baseline_requires_bridge=0
+  elif [ "$current_mode" = ap_ethernet ] \
+    && { [ -z "$current_bridge" ] || [ ! -d "/sys/class/net/$current_bridge/bridge" ]; }; then
+    baseline_requires_bridge=0
+  fi
+  for baseline_ap in $current_ap24 $current_ap5; do
+    [ -n "$baseline_ap" ] || continue
+    if [ "$baseline_requires_bridge" -eq 1 ] \
+      && [ "$(basename "$(readlink -f "/sys/class/net/$baseline_ap/master" 2>/dev/null)")" != "$bridge" ]; then
+      hostapd_cli -i "$baseline_ap" ping 2>/dev/null | grep -Fxq PONG \
+        || fail "Current hotspot baseline is unhealthy: hostapd is not ready on $baseline_ap"
+      iw dev "$baseline_ap" info 2>/dev/null \
+        | awk '$1 == "type" && $2 == "AP" {found=1} END {exit !found}' \
+        || fail "Current hotspot baseline is unhealthy: $baseline_ap is not in AP mode"
+      ip link set dev "$baseline_ap" master "$bridge" \
+        || fail "Current hotspot baseline could not be repaired: unable to attach $baseline_ap to $bridge"
+    fi
+  done
+  if ! baseline_output="$(verify_restored_runtime)"; then
+    fail "Current hotspot baseline is unhealthy: $baseline_output"
+  fi
+fi
+
+cold_restore_files() {
+  [ "$cold_swap_active" -eq 1 ] || return 0
+  systemctl disable --now openap-uplink.service >/dev/null 2>&1 || true
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rm -f -- "$path"
+  done < "$cold_backup_dir/absent-paths"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ -e "$cold_backup_dir$path" ] && cp -a "$cold_backup_dir$path" "$path"
+  done < "$cold_backup_dir/existing-paths"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+cold_abort() {
+  reason="$1"
+  trap - EXIT HUP INT TERM
+  cold_restore_files
+  systemctl restart systemd-networkd.service >/dev/null 2>&1 || true
+  systemctl enable --now openap-uplink.service >/dev/null 2>&1 || true
+  ip -4 route del default dev "$ethernet" >/dev/null 2>&1 || true
+  systemctl reset-failed hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+  systemctl restart hostapd.service dnsmasq.service openap-firewall.service >/dev/null 2>&1 || true
+  systemctl start openap-uplink-watchdog.timer >/dev/null 2>&1 || true
+  record_rollback_result "$reason" "$cold_backup_dir"
+  rm -rf -- "$work_dir"
+  exit 1
+}
+
+if [ "$current_mode" = repeater_wifi ] && [ "$uplink" != "$current_uplink" ]; then
+  case "$current_uplink" in ''|null|lo|*[!A-Za-z0-9_.:-]*) fail "Current Wi-Fi UPLINK is invalid" ;; esac
+  current_uplink_conf="/etc/wpa_supplicant/wpa_supplicant-${current_uplink}.conf"
+  [ -r "$current_uplink_conf" ] || fail "Current Wi-Fi UPLINK credentials are unavailable"
+  cold_old_uplink="$current_uplink"
+  cold_new_uplink="$uplink"
+  cold_backup_dir="/etc/openap/backups/cold-role-swap-$(date +%Y%m%d-%H%M%S)"
+  [ ! -e "$cold_backup_dir" ] || fail "Cold role swap backup already exists"
+  mkdir -p "$cold_backup_dir"
+  : > "$cold_backup_dir/existing-paths"
+  : > "$cold_backup_dir/absent-paths"
+  for path in \
+    /etc/systemd/system/openap-uplink.service \
+    "/etc/wpa_supplicant/wpa_supplicant-${cold_old_uplink}.conf" \
+    "/etc/wpa_supplicant/wpa_supplicant-${cold_new_uplink}.conf" \
+    "/etc/systemd/network/30-${cold_old_uplink}-sta.network" \
+    "/etc/systemd/network/30-${cold_new_uplink}-sta.network"; do
+    if [ -e "$path" ]; then
+      cp -a --parents "$path" "$cold_backup_dir"
+      printf '%s\n' "$path" >> "$cold_backup_dir/existing-paths"
+    else
+      printf '%s\n' "$path" >> "$cold_backup_dir/absent-paths"
+    fi
+  done
+  cold_swap_active=1
+  trap 'cold_abort "Cold role swap interrupted"' EXIT HUP INT TERM
+  transfer_conf="$(mktemp /tmp/openap-uplink-cold-swap.XXXXXX.conf)"
+  install -m 0600 "$current_uplink_conf" "$transfer_conf"
+  systemctl stop openap-uplink-watchdog.timer openap-uplink-watchdog.service \
+    || cold_abort "Unable to pause the UPLINK watchdog"
+  systemctl stop hostapd.service dnsmasq.service || cold_abort "Unable to release the AP radios"
+  if [ -x "$radio_reset_helper" ]; then
+    "$radio_reset_helper" "$cold_new_uplink" \
+      || cold_abort "Unable to reset the AP radio before role swap: $cold_new_uplink"
+  fi
+  if ! transfer_output="$(/usr/local/sbin/openap-apply-uplink-wifi --cold-role-swap "$cold_new_uplink" "$transfer_conf" 2>&1)"; then
+    rm -f -- "$transfer_conf"
+    cold_abort "Unable to connect the new UPLINK $cold_new_uplink: $transfer_output"
+  fi
+  rm -f -- "$transfer_conf" "/etc/systemd/network/30-${cold_old_uplink}-sta.network"
+  ip -4 -o address show dev "$cold_new_uplink" | grep -q ' inet ' \
+    || cold_abort "New Wi-Fi UPLINK has no IPv4 address"
+  echo "Cold role swap prepared: UPLINK $cold_old_uplink -> $cold_new_uplink"
+fi
+
+for source in "$work_dir/generated"/ap-*.conf; do
+  target="$work_dir/$(basename "$source")"
+  if [ "$address_backend" = openap-ap-address ]; then
+    # Native Raspberry AP mode must remain an unbridged hostapd interface.
+    cp "$source" "$target"
+  else
+    awk -v bridge="$bridge" '
+      BEGIN { done=0 }
+      /^bridge=/ { if (!done) print "bridge=" bridge; done=1; next }
+      { print }
+      END { if (!done) print "bridge=" bridge }
+    ' "$source" > "$target"
+  fi
+done
+
+hostapd_args=""
+[ -z "$ap24" ] || hostapd_args="$hostapd_args $hostapd24"
+[ -z "$ap5" ] || hostapd_args="$hostapd_args $hostapd5"
+cat > "$work_dir/hostapd-override.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/hostapd -B -P /run/hostapd.pid$hostapd_args
+EOF
+
+if [ "$address_backend" = openap-ap-address ]; then
+  if [ "$action" = --validate-only ]; then
+    echo "Native AP-address hotspot validation passed"
+    exit 0
+  fi
+
+  native_backup="/etc/openap/backups/dual-hostapd-native-$(date +%Y%m%d-%H%M%S)"
+  [ ! -e "$native_backup" ] || fail "Backup destination already exists"
+  mkdir -p "$native_backup"
+  : > "$native_backup/existing-paths"
+  : > "$native_backup/absent-paths"
+  for path in "$profile" "$roles" "$dnsmasq_conf" "$hostapd24" "$hostapd5" "$hostapd_override" "$bridge_netdev" "$bridge_network"; do
+    if [ -e "$path" ]; then
+      cp -a --parents "$path" "$native_backup"
+      printf '%s\n' "$path" >> "$native_backup/existing-paths"
+    else
+      printf '%s\n' "$path" >> "$native_backup/absent-paths"
+    fi
+  done
+
+  native_rollback() {
+    reason="${1:-Native AP-address hotspot verification failed}"
+    trap - EXIT HUP INT TERM
+    systemctl stop hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      rm -f -- "$path"
+    done < "$native_backup/absent-paths"
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      [ -e "$native_backup$path" ] && cp -a "$native_backup$path" "$path"
+    done < "$native_backup/existing-paths"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl restart openap-ap-address.service >/dev/null 2>&1 || true
+    systemctl reset-failed hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+    systemctl restart hostapd.service dnsmasq.service openap-firewall.service >/dev/null 2>&1 || true
+    record_rollback_result "$reason" "$native_backup"
+    rm -rf -- "$work_dir"
+    exit 1
+  }
+  trap native_rollback EXIT HUP INT TERM
+  printf '%s\n' applying > /run/openap/dual-hostapd-apply.state
+
+  [ -z "$ap24" ] || install -o root -g www-data -m 0640 "$work_dir/ap-24ghz.conf" "$hostapd24"
+  [ -z "$ap5" ] || install -o root -g www-data -m 0640 "$work_dir/ap-5ghz.conf" "$hostapd5"
+  [ -n "$ap24" ] || rm -f -- "$hostapd24"
+  [ -n "$ap5" ] || rm -f -- "$hostapd5"
+  install -o root -g root -m 0644 "$work_dir/hostapd-override.conf" "$hostapd_override"
+
+  native_gateway_interface="$ap24"
+  [ -n "$native_gateway_interface" ] || native_gateway_interface="$ap5"
+  native_profile_bridge=""
+  if [ "$native_dual_bridge" -eq 1 ]; then
+    native_gateway_interface="$bridge"
+    native_profile_bridge="$bridge"
+  fi
+  native_dns_disabled=0
+  [ ! -f "$dnsmasq_conf" ] || ! grep -q '^port=0$' "$dnsmasq_conf" || native_dns_disabled=1
+  {
+    echo "interface=$native_gateway_interface"
+    echo "bind-interfaces"
+    echo "listen-address=$gateway"
+    [ "$native_dns_disabled" -eq 0 ] || echo "port=0"
+    echo "dhcp-authoritative"
+    echo "dhcp-range=$dhcp_start,$dhcp_end,255.255.255.0,12h"
+    echo "dhcp-option=3,$gateway"
+    if [ "$native_dns_disabled" -eq 1 ]; then
+      echo "dhcp-option=6,1.1.1.1,1.0.0.1"
+    else
+      echo "dhcp-option=6,$gateway"
+      sed -n '/^server=/p; /^no-resolv$/p; /^domain-needed$/p; /^bogus-priv$/p' "$dnsmasq_conf"
+    fi
+  } > "$work_dir/dnsmasq-native.conf"
+  dnsmasq --test --conf-file="$work_dir/dnsmasq-native.conf" >/dev/null
+
+  python3 - "$profile" "$roles" "$ap24" "$ap5" "$uplink" "$native_profile_bridge" <<'PY'
+import configparser, os, sys, tempfile
+profile_path, roles_path, ap24, ap5, uplink, profile_bridge = sys.argv[1:]
+def load(path):
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.optionxform = str
+    parser.read(path, encoding="utf-8")
+    return parser
+profile, roles = load(profile_path), load(roles_path)
+if not profile.has_section("interfaces"):
+    profile.add_section("interfaces")
+profile.set("interfaces", "ap", ap24 or ap5)
+profile.set("interfaces", "ap_24ghz", ap24)
+profile.set("interfaces", "ap_5ghz", ap5)
+profile.set("interfaces", "bridge", profile_bridge)
+if profile.has_section("network"):
+    profile.set("network", "bridge", profile_bridge)
+profile.set("interfaces", "uplink", uplink)
+profile.set("interfaces", "uplink_mac", roles.get("draft", "uplink", fallback=""))
+primary = "ap_24ghz" if ap24 else "ap_5ghz"
+profile.set("interfaces", "ap_mac", roles.get("draft", primary, fallback=""))
+for role in ("ap_24ghz", "ap_5ghz", "uplink"):
+    roles.set("active", role, roles.get("draft", role, fallback=""))
+for source, destination in (
+    ("hotspot_draft", "hotspot_active"),
+    ("ap_24ghz_draft", "ap_24ghz_active"),
+    ("ap_5ghz_draft", "ap_5ghz_active"),
+):
+    if roles.has_section(destination):
+        roles.remove_section(destination)
+    roles.add_section(destination)
+    if roles.has_section(source):
+        for key, value in roles.items(source):
+            roles.set(destination, key, value)
+def atomic_write(path, parser, prefix):
+    metadata = os.stat(path)
+    directory = os.path.dirname(path)
+    fd, temporary = tempfile.mkstemp(prefix=prefix, dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            parser.write(stream, space_around_delimiters=True)
+        os.chown(temporary, metadata.st_uid, metadata.st_gid)
+        os.chmod(temporary, metadata.st_mode & 0o777)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+atomic_write(profile_path, profile, ".repeater.ini.")
+atomic_write(roles_path, roles, ".wifi-roles.ini.")
+PY
+
+  systemctl stop hostapd.service dnsmasq.service || native_rollback "Unable to stop hotspot services"
+  if [ -d /sys/class/net/openap0/bridge ] && [ "$native_gateway_interface" != openap0 ]; then
+    ip -4 address flush dev openap0 scope global >/dev/null 2>&1 || true
+    ip link set dev openap0 down >/dev/null 2>&1 || true
+    ip link delete dev openap0 type bridge >/dev/null 2>&1 || true
+  fi
+  rm -f -- "$bridge_netdev" "$bridge_network"
+  install -o root -g root -m 0644 "$work_dir/dnsmasq-native.conf" "$dnsmasq_conf"
+  systemctl daemon-reload
+  systemctl restart openap-ap-address.service || native_rollback "AP address preparation failed"
+  systemctl start hostapd.service || native_rollback "hostapd did not restart in native AP-address mode"
+  systemctl start dnsmasq.service || native_rollback "dnsmasq did not restart in native AP-address mode"
+  systemctl restart openap-firewall.service || native_rollback "Firewall activation failed"
+  systemctl is-active --quiet hostapd.service dnsmasq.service openap-firewall.service \
+    || native_rollback "A required hotspot service is inactive"
+
+  ip -4 -o address show dev "$native_gateway_interface" | grep -Fq " $gateway/" \
+    || native_rollback "Hotspot gateway is absent from $native_gateway_interface"
+  if [ "$native_dual_bridge" -eq 1 ]; then
+    for iface in $ap_interfaces; do
+      [ "$(basename "$(readlink -f "/sys/class/net/$iface/master" 2>/dev/null)")" = "$bridge" ] \
+        || native_rollback "$iface is not attached to $bridge"
+    done
+  fi
+  for iface in $ap_interfaces; do
+    hostapd_cli -i "$iface" ping 2>/dev/null | grep -Fxq PONG \
+      || native_rollback "hostapd did not answer on $iface"
+    iw dev "$iface" info 2>/dev/null \
+      | awk '$1 == "type" && $2 == "AP" {found=1} END {exit !found}' \
+      || native_rollback "$iface did not enter AP mode"
+  done
+  if [ "$current_mode" = repeater_wifi ]; then
+    systemctl is-active --quiet openap-uplink.service \
+      || native_rollback "UPLINK service is inactive"
+    iw dev "$uplink" link 2>/dev/null | grep -q '^Connected to ' \
+      || native_rollback "UPLINK is not associated"
+    ip -4 -o address show dev "$uplink" | grep -q ' inet ' \
+      || native_rollback "UPLINK has no IPv4 address"
+    ip -4 route show default dev "$uplink" | grep -q . \
+      || native_rollback "UPLINK has no default route"
+    nft list table ip openap_nat 2>/dev/null | grep -Fq "oifname \"$uplink\"" \
+      || native_rollback "Hotspot NAT does not use $uplink"
+  fi
+  trap cleanup EXIT HUP INT TERM
+  rm -f /run/openap/dual-hostapd-apply.error
+  printf '%s\n' success > /run/openap/dual-hostapd-apply.state
+  echo "Native AP-address hotspot applied"
+  echo "Hotspot interface: $native_gateway_interface ($gateway)"
+  echo "Backup: $native_backup"
+  exit 0
+fi
+
+if [ "$current_mode" = ap_ethernet_bridge ]; then
+  if [ "$action" = --validate-only ]; then
+    echo "Ethernet Bridge hotspot validation passed"
+    exit 0
+  fi
+  bridge_backup="/etc/openap/backups/dual-hostapd-bridge-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$bridge_backup"
+  for path in "$profile" "$roles" "$hostapd24" "$hostapd5" "$hostapd_override"; do
+    if [ -e "$path" ]; then cp -a --parents "$path" "$bridge_backup"; else printf '%s\n' "$path" >> "$bridge_backup/absent"; fi
+  done
+  bridge_rollback() {
+    reason="${1:-Bridge hotspot verification failed}"
+    trap - EXIT HUP INT TERM
+    [ ! -f "$bridge_backup/absent" ] || while IFS= read -r path; do rm -f -- "$path"; done < "$bridge_backup/absent"
+    for path in "$profile" "$roles" "$hostapd24" "$hostapd5" "$hostapd_override"; do
+      [ ! -e "$bridge_backup$path" ] || cp -a "$bridge_backup$path" "$path"
+    done
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl restart hostapd.service >/dev/null 2>&1 || true
+    printf '%s\n' failed > /run/openap/dual-hostapd-apply.state
+    printf '%s\n' "$reason" > /run/openap/dual-hostapd-apply.error
+    rm -rf -- "$work_dir"
+    exit 1
+  }
+  trap bridge_rollback EXIT HUP INT TERM
+  printf '%s\n' applying > /run/openap/dual-hostapd-apply.state
+  systemctl stop hostapd.service
+  if [ -x "$radio_reset_helper" ]; then
+    for iface in $ap_interfaces; do
+      "$radio_reset_helper" "$iface" \
+        || bridge_rollback "Unable to reset AP radio before bridge hotspot apply: $iface"
+    done
+  fi
+  [ -z "$ap24" ] || install -o root -g www-data -m 0640 "$work_dir/ap-24ghz.conf" "$hostapd24"
+  [ -z "$ap5" ] || install -o root -g www-data -m 0640 "$work_dir/ap-5ghz.conf" "$hostapd5"
+  [ -n "$ap24" ] || rm -f -- "$hostapd24"
+  [ -n "$ap5" ] || rm -f -- "$hostapd5"
+  install -o root -g root -m 0644 "$work_dir/hostapd-override.conf" "$hostapd_override"
+  python3 - "$profile" "$roles" "$ap24" "$ap5" "$uplink" <<'PY'
+import configparser, os, sys, tempfile
+profile_path, roles_path, ap24, ap5, uplink = sys.argv[1:]
+def load(path):
+    parser = configparser.ConfigParser(interpolation=None, strict=False); parser.optionxform = str
+    parser.read(path, encoding="utf-8"); return parser
+profile, roles = load(profile_path), load(roles_path)
+if not profile.has_section("interfaces"): profile.add_section("interfaces")
+profile.set("interfaces", "ap", ap24 or ap5)
+profile.set("interfaces", "ap_24ghz", ap24); profile.set("interfaces", "ap_5ghz", ap5)
+profile.set("interfaces", "bridge", "br0")
+profile.set("interfaces", "uplink", uplink)
+profile.set("interfaces", "uplink_mac", roles.get("draft", "uplink", fallback=""))
+primary = "ap_24ghz" if ap24 else "ap_5ghz"
+profile.set("interfaces", "ap_mac", roles.get("draft", primary, fallback=""))
+for role in ("ap_24ghz", "ap_5ghz", "uplink"):
+    roles.set("active", role, roles.get("draft", role, fallback=""))
+for source, destination in (("hotspot_draft","hotspot_active"),("ap_24ghz_draft","ap_24ghz_active"),("ap_5ghz_draft","ap_5ghz_active")):
+    if roles.has_section(destination): roles.remove_section(destination)
+    roles.add_section(destination)
+    if roles.has_section(source):
+        for key, value in roles.items(source): roles.set(destination, key, value)
+def write(path, parser):
+    metadata=os.stat(path); fd,tmp=tempfile.mkstemp(prefix=".openap.",dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8") as stream: parser.write(stream,space_around_delimiters=True)
+        os.chown(tmp,metadata.st_uid,metadata.st_gid); os.chmod(tmp,metadata.st_mode & 0o777); os.replace(tmp,path)
+    finally:
+        if os.path.exists(tmp): os.unlink(tmp)
+write(profile_path,profile); write(roles_path,roles)
+PY
+  systemctl daemon-reload
+  systemctl start hostapd.service || bridge_rollback "hostapd did not restart in Ethernet Bridge mode"
+  ip -4 -o address show dev br0 | grep -q ' inet ' || bridge_rollback "br0 lost its IPv4 address"
+  for iface in $ap_interfaces; do
+    hostapd_cli -i "$iface" ping 2>/dev/null | grep -Fxq PONG || bridge_rollback "hostapd did not answer on $iface"
+    [ "$(basename "$(readlink -f "/sys/class/net/$iface/master" 2>/dev/null)")" = br0 ] || bridge_rollback "$iface is not attached to br0"
+  done
+  trap cleanup EXIT HUP INT TERM
+  rm -f /run/openap/dual-hostapd-apply.error
+  printf '%s\n' success > /run/openap/dual-hostapd-apply.state
+  echo "Ethernet Bridge hotspot roles applied"
+  exit 0
+fi
+cat > "$work_dir/bridge.netdev" <<EOF
+[NetDev]
+Name=$bridge
+Kind=bridge
+
+[Bridge]
+STP=false
+EOF
+cat > "$work_dir/bridge.network" <<EOF
+[Match]
+Name=$bridge
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=$gateway/$hotspot_prefix
+DHCP=no
+LinkLocalAddressing=no
+ConfigureWithoutCarrier=yes
+EOF
+
+dns_disabled=0
+[ ! -f "$dnsmasq_conf" ] || ! grep -q '^port=0$' "$dnsmasq_conf" || dns_disabled=1
+{
+  echo "interface=$bridge"
+  echo "bind-interfaces"
+  echo "listen-address=$gateway"
+  [ "$dns_disabled" -eq 0 ] || echo "port=0"
+  echo "dhcp-authoritative"
+  echo "dhcp-range=$dhcp_start,$dhcp_end,255.255.255.0,12h"
+  echo "dhcp-option=3,$gateway"
+  if [ "$dns_disabled" -eq 1 ]; then
+    echo "dhcp-option=6,1.1.1.1,1.0.0.1"
+  else
+    echo "dhcp-option=6,$gateway"
+    sed -n '/^server=/p; /^no-resolv$/p; /^domain-needed$/p; /^bogus-priv$/p' "$dnsmasq_conf"
+  fi
+} > "$work_dir/dnsmasq.conf"
+dnsmasq --test --conf-file="$work_dir/dnsmasq.conf" >/dev/null
+cat > "$work_dir/openap.nft" <<EOF
+table ip openap_nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname "$nat_uplink" ip saddr $subnet masquerade
+  }
+}
+EOF
+nft -c -f "$work_dir/openap.nft"
+
+if [ "$action" = --validate-only ]; then
+  printf 'Hotspot validation passed\n'
+  [ -z "$ap24" ] || printf '2.4 GHz AP: %s\n' "$ap24"
+  [ -z "$ap5" ] || printf '5 GHz AP: %s\n' "$ap5"
+  printf 'Hotspot bridge: %s (%s)\n%s\n' "$bridge" "$gateway" "$uplink_description"
+  echo "No changes were applied"
+  exit 0
+fi
+
+backup_dir="/etc/openap/backups/dual-hostapd-$(date +%Y%m%d-%H%M%S)"
+[ ! -e "$backup_dir" ] || fail "Backup destination already exists"
+mkdir -p "$backup_dir"
+: > "$backup_dir/existing-paths"
+: > "$backup_dir/absent-paths"
+for path in "$profile" "$roles" "$dnsmasq_conf" "$firewall_conf" "$hostapd24" "$hostapd5" "$hostapd_override" "$bridge_netdev" "$bridge_network" /etc/systemd/network/20-openap-ap.network; do
+  if [ -e "$path" ]; then
+    cp -a --parents "$path" "$backup_dir"
+    printf '%s\n' "$path" >> "$backup_dir/existing-paths"
+  else
+    printf '%s\n' "$path" >> "$backup_dir/absent-paths"
+  fi
+done
+for iface in $ap_interfaces; do
+  current_txpower="$(iw dev "$iface" info 2>/dev/null | awk '$1 == "txpower" {printf "%.0f", $2 * 100; exit}')"
+  case "$current_txpower" in ''|*[!0-9]*) ;; *) printf '%s %s\n' "$iface" "$current_txpower" >> "$backup_dir/txpower-before" ;; esac
+done
+
+rollback() {
+  reason="${1:-Final hotspot verification failed}"
+  trap - EXIT HUP INT TERM
+  systemctl stop hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rm -f -- "$path"
+  done < "$backup_dir/absent-paths"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ -e "$backup_dir$path" ] && cp -a "$backup_dir$path" "$path"
+  done < "$backup_dir/existing-paths"
+  cold_restore_files
+  if [ -d "/sys/class/net/$bridge/bridge" ]; then
+    ip link set dev "$bridge" down >/dev/null 2>&1 || true
+    ip link delete dev "$bridge" type bridge >/dev/null 2>&1 || true
+  fi
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl restart systemd-networkd.service >/dev/null 2>&1 || true
+  if [ "$cold_swap_active" -eq 1 ]; then
+    systemctl enable --now openap-uplink.service >/dev/null 2>&1 || true
+  fi
+  [ "$current_mode" != repeater_wifi ] \
+    || ip -4 route del default dev "$ethernet" >/dev/null 2>&1 || true
+  systemctl reset-failed hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+  systemctl restart hostapd.service dnsmasq.service openap-firewall.service >/dev/null 2>&1 || true
+  systemctl start openap-uplink-watchdog.timer >/dev/null 2>&1 || true
+  if [ -f "$backup_dir/txpower-before" ]; then
+    while read -r iface mbm; do
+      case "$iface:$mbm" in *[!A-Za-z0-9_.:-]*) continue ;; esac
+      iw dev "$iface" set txpower fixed "$mbm" >/dev/null 2>&1 || true
+    done < "$backup_dir/txpower-before"
+  fi
+  record_rollback_result "$reason" "$backup_dir"
+  rm -rf -- "$work_dir"
+  exit 1
+}
+trap rollback EXIT HUP INT TERM
+mkdir -p /run/openap
+printf '%s\n' applying > /run/openap/dual-hostapd-apply.state
+
+systemctl stop hostapd.service dnsmasq.service
+if [ -x "$radio_reset_helper" ]; then
+  for iface in $ap_interfaces; do
+    "$radio_reset_helper" "$iface" \
+      || rollback "Unable to reset AP radio before hotspot apply: $iface"
+  done
+fi
+[ -z "$ap24" ] || install -o root -g www-data -m 0640 "$work_dir/ap-24ghz.conf" "$hostapd24"
+[ -z "$ap5" ] || install -o root -g www-data -m 0640 "$work_dir/ap-5ghz.conf" "$hostapd5"
+[ -n "$ap24" ] || rm -f -- "$hostapd24"
+[ -n "$ap5" ] || rm -f -- "$hostapd5"
+install -o root -g root -m 0644 "$work_dir/hostapd-override.conf" "$hostapd_override"
+install -o root -g root -m 0644 "$work_dir/bridge.netdev" "$bridge_netdev"
+install -o root -g root -m 0644 "$work_dir/bridge.network" "$bridge_network"
+install -o root -g root -m 0644 "$work_dir/dnsmasq.conf" "$dnsmasq_conf"
+install -o root -g root -m 0644 "$work_dir/openap.nft" "$firewall_conf"
+rm -f /etc/systemd/network/20-openap-ap.network
+
+python3 - "$profile" "$roles" "$bridge" "$ap24" "$ap5" "$uplink" <<'PY'
+import configparser, os, sys, tempfile
+profile_path, roles_path, bridge, ap24, ap5, uplink = sys.argv[1:]
+roles = configparser.ConfigParser(interpolation=None, strict=False)
+roles.optionxform = str
+roles.read(roles_path, encoding="utf-8")
+profile = configparser.ConfigParser(interpolation=None, strict=False)
+profile.optionxform = str
+profile.read(profile_path, encoding="utf-8")
+if not profile.has_section("interfaces"):
+    profile.add_section("interfaces")
+profile.set("interfaces", "ap", ap24 or ap5)
+profile.set("interfaces", "ap_24ghz", ap24)
+profile.set("interfaces", "ap_5ghz", ap5)
+profile.set("interfaces", "bridge", bridge)
+profile.set("interfaces", "uplink", uplink)
+profile.set("interfaces", "uplink_mac", roles.get("draft", "uplink", fallback=""))
+primary_role = "ap_24ghz" if ap24 else "ap_5ghz"
+profile.set("interfaces", "ap_mac", roles.get("draft", primary_role, fallback=""))
+for role in ("ap_24ghz", "ap_5ghz", "uplink"):
+    roles.set("active", role, roles.get("draft", role, fallback=""))
+for source, destination in (
+    ("hotspot_draft", "hotspot_active"),
+    ("ap_24ghz_draft", "ap_24ghz_active"),
+    ("ap_5ghz_draft", "ap_5ghz_active"),
+):
+    if roles.has_section(destination):
+        roles.remove_section(destination)
+    roles.add_section(destination)
+    for key, value in roles.items(source):
+        roles.set(destination, key, value)
+
+def atomic_write(path, parser, prefix):
+    metadata = os.stat(path)
+    directory = os.path.dirname(path)
+    fd, temporary = tempfile.mkstemp(prefix=prefix, dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            parser.write(stream, space_around_delimiters=True)
+        os.chown(temporary, metadata.st_uid, metadata.st_gid)
+        os.chmod(temporary, metadata.st_mode & 0o777)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+atomic_write(profile_path, profile, ".repeater.ini.")
+atomic_write(roles_path, roles, ".wifi-roles.ini.")
+PY
+
+systemctl daemon-reload
+systemctl restart systemd-networkd.service
+remaining=15
+while [ "$remaining" -gt 0 ]; do
+  ip -4 -o address show dev "$bridge" 2>/dev/null | grep -Fq " $gateway/" && break
+  remaining=$((remaining - 1)); sleep 1
+done
+[ "$remaining" -gt 0 ] || rollback
+systemctl reset-failed hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+systemctl start hostapd.service
+systemctl start dnsmasq.service
+systemctl restart openap-firewall.service
+systemctl is-active --quiet hostapd.service dnsmasq.service openap-firewall.service || rollback "A required hotspot service did not become active"
+for iface in $ap_interfaces; do
+  ip link set dev "$iface" master "$bridge" || rollback "Unable to attach AP interface $iface to $bridge"
+done
+for iface in $ap_interfaces; do
+  ip -4 address del "$gateway/$hotspot_prefix" dev "$iface" >/dev/null 2>&1 || true
+  ip -4 -o address show dev "$iface" | grep -Fq " $gateway/" \
+    && rollback "Hotspot gateway remained assigned to bridge member $iface"
+done
+nft list table ip openap_nat 2>/dev/null | grep -Fq "oifname \"$nat_uplink\"" \
+  || rollback "Hotspot NAT does not use $nat_uplink"
+if [ "$current_mode" = repeater_wifi ]; then
+  remaining=15
+  while [ "$remaining" -gt 0 ]; do
+    if iw dev "$uplink" link 2>/dev/null | grep -q '^Connected to ' \
+      && ip -4 -o address show dev "$uplink" | grep -q ' inet '; then
+      break
+    fi
+    remaining=$((remaining - 1)); sleep 1
+  done
+  [ "$remaining" -gt 0 ] || rollback "Wi-Fi UPLINK did not recover after hotspot apply"
+  ip -4 route del default dev "$ethernet" >/dev/null 2>&1 || true
+  ip -4 route get 1.1.1.1 2>/dev/null | grep -Eq "(^|[[:space:]])dev[[:space:]]+$uplink([[:space:]]|$)" \
+    || rollback "Internet route does not use the assigned Wi-Fi UPLINK"
+fi
+for iface in $ap_interfaces; do
+  hostapd_cli -i "$iface" ping 2>/dev/null | grep -Fxq PONG || rollback "hostapd did not answer on $iface"
+  iw dev "$iface" info 2>/dev/null | awk '$1 == "type" && $2 == "AP" {found=1} END {exit !found}' || rollback "$iface did not enter AP mode"
+done
+
+set_and_verify_txpower() {
+  iface="$1" requested="$2" attempts=6
+  while [ "$attempts" -gt 0 ]; do
+    if iw dev "$iface" set txpower fixed "$((requested * 100))" 2>/dev/null; then
+      actual="$(iw dev "$iface" info 2>/dev/null | awk '$1 == "txpower" {printf "%.0f", $2; exit}')"
+      case "$actual" in
+        ''|*[!0-9]*) ;;
+        *)
+          if [ "$actual" -ge 1 ] && [ "$actual" -le "$requested" ]; then
+            if [ "$actual" -lt "$requested" ]; then
+              echo "$iface TX power clamped by driver from $requested to $actual dBm" >&2
+            fi
+            return 0
+          fi
+          ;;
+      esac
+    fi
+    attempts=$((attempts - 1))
+    [ "$attempts" -eq 0 ] || sleep 1
+  done
+  return 1
+}
+
+[ -z "$ap24" ] || set_and_verify_txpower "$ap24" "$tx24" || rollback "Unable to set $ap24 TX power to $tx24 dBm"
+[ -z "$ap5" ] || set_and_verify_txpower "$ap5" "$tx5" || rollback "Unable to set $ap5 TX power to $tx5 dBm"
+power_pairs=""
+[ -z "$ap24" ] || power_pairs="$power_pairs $ap24:$tx24"
+[ -z "$ap5" ] || power_pairs="$power_pairs $ap5:$tx5"
+trap cleanup EXIT HUP INT TERM
+if [ "$cold_swap_active" -eq 1 ]; then
+  rm -f -- "/etc/wpa_supplicant/wpa_supplicant-${cold_old_uplink}.conf"
+  systemctl start openap-uplink-watchdog.timer >/dev/null 2>&1 || true
+fi
+rm -f /run/openap/dual-hostapd-apply.error
+printf '%s\n' success > /run/openap/dual-hostapd-apply.state
+printf 'Hotspot active\n'
+[ -z "$ap24" ] || printf '2.4 GHz AP: %s\n' "$ap24"
+[ -z "$ap5" ] || printf '5 GHz AP: %s\n' "$ap5"
+printf 'Hotspot bridge: %s (%s)\nBackup: %s\n' "$bridge" "$gateway" "$backup_dir"

@@ -1,0 +1,41 @@
+www-data ALL=(ALL) NOPASSWD:/bin/cp /tmp/hostapddata /etc/hostapd/hostapd.conf
+www-data ALL=(ALL) NOPASSWD:/usr/bin/cp /tmp/hostapddata /etc/openap/hostapd/hostapd.conf
+www-data ALL=(ALL) NOPASSWD:/bin/cp /tmp/dnsmasqdata /etc/dnsmasq.d/openap-repeater.conf
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl start hostapd.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl stop hostapd.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl restart hostapd.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl start hostapd.service dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl restart hostapd.service dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl status hostapd.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl start dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl stop dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl restart dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl reload dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl status dnsmasq.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl restart openap-uplink.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl stop openap-uplink.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl disable openap-uplink.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl status openap-uplink.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl restart openap-firewall.service
+www-data ALL=(ALL) NOPASSWD:/bin/systemctl status openap-firewall.service
+www-data ALL=(ALL) NOPASSWD:/usr/bin/journalctl -u hostapd.service *
+www-data ALL=(ALL) NOPASSWD:/usr/bin/journalctl -u dnsmasq.service *
+www-data ALL=(root) NOPASSWD: /usr/bin/journalctl -u dnscrypt-proxy.service -n 240 --no-pager --output=short-iso
+www-data ALL=(ALL) NOPASSWD:/usr/bin/journalctl -u openap-uplink.service *
+# Interface-specific hostapd_cli, wpa_cli and iw rules are appended by the
+# universal installer. Exact arguments keep this file compatible with sudo-rs.
+www-data ALL=(ALL) NOPASSWD:/usr/sbin/nft list ruleset
+www-data ALL=(ALL) NOPASSWD:/usr/sbin/sysctl net.ipv4.ip_forward
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-apply-ap-ethernet *
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-apply-repeater-wifi *
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-apply-uplink-wifi *
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-scan-wifi *
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-forget-uplink-wifi *
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-apply-dhcp-settings *
+www-data ALL=(root) NOPASSWD:/usr/local/sbin/openap-switch-interface-roles --delayed *
+www-data ALL=(root) NOPASSWD:/usr/local/sbin/openap-apply-encrypted-dns *
+www-data ALL=(root) NOPASSWD:/usr/local/sbin/openap-apply-dual-hostapd --apply-delayed
+www-data ALL=(root) NOPASSWD:/usr/local/sbin/openap-system-reboot
+www-data ALL=(root) NOPASSWD:/usr/local/sbin/openap-component-manager *
+www-data ALL=(root) NOPASSWD: /usr/bin/journalctl -u lighttpd.service -n 240 --no-pager --output=short-iso
+www-data ALL=(ALL) NOPASSWD:/usr/local/sbin/openap-apply-ap-ethernet-bridge *

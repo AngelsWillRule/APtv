@@ -1,0 +1,4 @@
+# Managed by the OpenAP IPTV component installer.
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/openap-iptv-index
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/openap-iptv-nfs
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/openap-component-manager *

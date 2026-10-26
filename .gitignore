@@ -1,0 +1,37 @@
+.DS_Store
+node_modules/
+vendor/
+yarn-error.log
+*.swp
+*~
+*.log
+*.tmp
+*.bak
+*.py[cod]
+__pycache__/
+.pytest_cache/
+.cache/
+includes/config.php
+rootCA.pem
+.env
+.env.*
+!.env.example
+app/net_activity
+app/js/plugins/
+
+# Local credentials and installed-system state
+*.auth
+*.key
+*.pem
+*.p12
+*.pfx
+*.ovpn
+
+# Local build, test and release outputs
+build/
+artifacts/
+coverage/
+*.tar
+*.tar.gz
+*.zip
+*.sha256

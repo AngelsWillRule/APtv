@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# Select and apply OpenAP AP/uplink Wi-Fi roles without reinstalling OpenAP.
+
+set -euo pipefail
+
+apply=0
+profile="/etc/openap/repeater.ini"
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+detector="$repo_dir/openap-installer/bin/openap-detect"
+apply_helper="$repo_dir/installers/openap-apply-ap-ethernet.sh"
+
+case "${1:-}" in
+  "") ;;
+  --apply) apply=1 ;;
+  -h|--help)
+    echo "Usage: openap-switch-interfaces [--apply]"
+    exit 0
+    ;;
+  *) echo "Unknown option: $1" >&2; exit 1 ;;
+esac
+
+[ -r "$profile" ] || {
+  echo "ERROR: OpenAP role profile not found: $profile" >&2
+  exit 1
+}
+[ -x "$detector" ] || {
+  echo "ERROR: detector not executable: $detector" >&2
+  exit 1
+}
+[ -x "$apply_helper" ] || {
+  echo "ERROR: apply helper not executable: $apply_helper" >&2
+  exit 1
+}
+[ -t 0 ] || {
+  echo "ERROR: interface selection requires an interactive terminal." >&2
+  exit 1
+}
+
+ini_value() {
+  awk -F ' *= *' -v wanted="$1" '$1 == wanted {print $2; exit}' "$profile"
+}
+
+current_ap="$(ini_value ap)"
+current_uplink="$(ini_value uplink)"
+current_mode="$(ini_value current)"
+ethernet_iface="$(ini_value ethernet)"
+case "$ethernet_iface" in
+  ""|*[!A-Za-z0-9_.:-]*)
+    echo "ERROR: invalid Ethernet interface in $profile" >&2
+    exit 1
+    ;;
+esac
+
+detect_json="$(mktemp /tmp/openap-switch-detect.XXXXXX)"
+case "$detect_json" in
+  /tmp/openap-switch-detect.*) ;;
+  *) echo "ERROR: unexpected temporary path" >&2; exit 1 ;;
+esac
+trap 'rm -f -- "$detect_json"' EXIT
+"$detector" --json > "$detect_json"
+
+mapfile -t radios < <(python3 - "$detect_json" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    data = json.load(stream)
+
+for item in data.get("interfaces", []):
+    name = item.get("name", "")
+    mac = item.get("mac", "")
+    if not item.get("is_wireless"):
+        continue
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]+", name):
+        continue
+    if not re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", mac):
+        continue
+    flags = []
+    if item.get("supports_ap"):
+        flags.append("AP")
+    if item.get("supports_managed"):
+        flags.append("managed")
+    bands = []
+    if item.get("supports_24ghz"):
+        bands.append("2.4GHz")
+    if item.get("supports_5ghz"):
+        bands.append("5GHz")
+    print("\t".join([
+        name,
+        mac.lower(),
+        "1" if item.get("supports_ap") else "0",
+        "1" if item.get("supports_managed") else "0",
+        item.get("driver") or "unknown",
+        item.get("bus") or "unknown",
+        ",".join(bands) or "unknown",
+        ",".join(flags) or "none",
+    ]))
+PY
+)
+
+if [ "${#radios[@]}" -lt 2 ]; then
+  echo "ERROR: at least two detected Wi-Fi interfaces are required." >&2
+  exit 1
+fi
+
+radio_field() {
+  local index="$1" field="$2"
+  printf '%s\n' "${radios[$index]}" | cut -f "$field"
+}
+
+print_radios() {
+  local index name role
+  for index in "${!radios[@]}"; do
+    name="$(radio_field "$index" 1)"
+    role=""
+    [ "$name" != "$current_ap" ] || role="current AP"
+    [ "$name" != "$current_uplink" ] || role="${role:+$role, }current uplink"
+    printf "  %d) %-18s %-17s driver=%-16s bus=%-4s bands=%s%s\n" \
+      "$((index + 1))" \
+      "$name" \
+      "$(radio_field "$index" 2)" \
+      "$(radio_field "$index" 5)" \
+      "$(radio_field "$index" 6)" \
+      "$(radio_field "$index" 7)" \
+      "${role:+ [$role]}"
+  done
+}
+
+choose_radio() {
+  local role="$1" required_field="$2" excluded_index="${3:-}" choice index capability
+  while true; do
+    printf "Select the %s interface [1-%d]: " "$role" "${#radios[@]}" >&2
+    IFS= read -r choice
+    case "$choice" in
+      ''|*[!0-9]*) echo "Enter a number from the list." >&2; continue ;;
+    esac
+    index=$((choice - 1))
+    if [ "$index" -lt 0 ] || [ "$index" -ge "${#radios[@]}" ]; then
+      echo "Enter a number from the list." >&2
+      continue
+    fi
+    if [ -n "$excluded_index" ] && [ "$index" -eq "$excluded_index" ]; then
+      echo "AP and uplink must use different interfaces." >&2
+      continue
+    fi
+    capability="$(radio_field "$index" "$required_field")"
+    if [ "$capability" != "1" ]; then
+      echo "The selected interface does not support the required $role role." >&2
+      continue
+    fi
+    printf '%s\n' "$index"
+    return 0
+  done
+}
+
+echo
+echo "Detected Wi-Fi interfaces"
+echo "==========================="
+print_radios
+echo
+ap_index="$(choose_radio "AP" 3)"
+uplink_index="$(choose_radio "uplink" 4 "$ap_index")"
+
+new_ap="$(radio_field "$ap_index" 1)"
+new_ap_mac="$(radio_field "$ap_index" 2)"
+new_uplink="$(radio_field "$uplink_index" 1)"
+new_uplink_mac="$(radio_field "$uplink_index" 2)"
+
+echo
+echo "Selected role assignment"
+echo "  AP:          $new_ap ($new_ap_mac)"
+echo "  WiFi uplink: $new_uplink ($new_uplink_mac)"
+
+if [ "$new_ap" = "$current_ap" ] && [ "$new_uplink" = "$current_uplink" ]; then
+  echo "The selected roles are already active. No changes are needed."
+  exit 0
+fi
+
+action="--validate-only"
+if [ "$apply" -eq 1 ]; then
+  [ "$(id -u)" -eq 0 ] || {
+    echo "ERROR: --apply must run as root." >&2
+    exit 1
+  }
+  answer=""
+  printf "Apply this role assignment? [y/N]: "
+  IFS= read -r answer
+  case "$answer" in
+    y|Y|yes|YES|Yes) action="--apply" ;;
+    *) echo "No changes were made."; exit 0 ;;
+  esac
+fi
+
+case "$current_mode" in
+  repeater_wifi)
+    current_uplink_wpa="/etc/wpa_supplicant/wpa_supplicant-${current_uplink}.conf"
+    new_uplink_wpa="/etc/wpa_supplicant/wpa_supplicant-${new_uplink}.conf"
+    if [ ! -r "$new_uplink_wpa" ] && [ ! -r "$current_uplink_wpa" ]; then
+      echo "ERROR: no saved Wi-Fi uplink configuration is available for the selected interface." >&2
+      exit 1
+    fi
+    if [ "$apply" -eq 0 ]; then
+      echo "Repeater role validation passed"
+      echo "AP interface: $new_ap ($new_ap_mac)"
+      echo "WiFi uplink: $new_uplink ($new_uplink_mac)"
+      echo "No changes were applied"
+    else
+      "$repo_dir/installers/openap-apply-repeater-wifi.sh" "$new_ap_mac" "$new_uplink_mac"
+    fi
+    ;;
+  ap_ethernet)
+    ethernet_gateway="$(ip -4 route show default dev "$ethernet_iface" | awk '$1 == "default" && $2 == "via" {print $3; exit}')"
+    ethernet_gateway="${ethernet_gateway:-$(ini_value ethernet_gateway)}"
+    [ -n "$ethernet_gateway" ] || {
+      echo "ERROR: no IPv4 gateway is known for Ethernet interface $ethernet_iface." >&2
+      exit 1
+    }
+    "$apply_helper" "$action" "$ethernet_iface" "$ethernet_gateway" "$new_ap_mac" "$new_uplink_mac"
+    ;;
+  *)
+    echo "ERROR: unsupported OpenAP mode in $profile: ${current_mode:-missing}" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$apply" -eq 0 ]; then
+  echo "DRY-RUN: role selection validated; no changes were made."
+  exit 0
+fi
+
+python3 - "$new_ap" "$new_uplink" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path("/etc/openap/hostapd.ini")
+values = {"WifiInterface": sys.argv[1], "WifiManaged": sys.argv[2]}
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+seen = set()
+result = []
+for line in lines:
+    key = line.split("=", 1)[0].strip() if "=" in line else ""
+    if key in values:
+        result.append(f"{key} = {values[key]}")
+        seen.add(key)
+    else:
+        result.append(line)
+for key, value in values.items():
+    if key not in seen:
+        result.append(f"{key} = {value}")
+path.write_text("\n".join(result) + "\n", encoding="utf-8")
+PY
+chown www-data:www-data /etc/openap/hostapd.ini
+chmod 0644 /etc/openap/hostapd.ini
+
+echo "OpenAP Wi-Fi roles updated without reinstalling the application."

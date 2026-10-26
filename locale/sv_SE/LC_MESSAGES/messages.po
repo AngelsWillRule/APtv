@@ -1,0 +1,2516 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: OpenAP 0.2.5.1\n"
+"Report-Msgid-Bugs-To: https://github.com/AngelsWillRule/OpenAP/issues\n"
+"POT-Creation-Date: 2026-08-05 15:59+0000\n"
+"PO-Revision-Date: 2026-04-22 02:22\n"
+"Last-Translator: \n"
+"Language-Team: Swedish\n"
+"Language: sv_SE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: ajax/networking/get_nl80211_band.php:37
+#, php-format
+msgid ""
+"The selected interface (%s) has support for the 2.4 GHz wireless band only."
+msgstr ""
+"Det valda gränssnittet (%s) har endast stöd för det trådlösa bandet 2,4 GHz."
+
+#: ajax/networking/get_nl80211_band.php:40
+#, php-format
+msgid ""
+"The selected interface (%s) has support for the 5 GHz wireless band only."
+msgstr ""
+"Det valda gränssnittet (%s) har endast stöd för det trådlösa 5 GHz-bandet."
+
+#: ajax/networking/get_nl80211_band.php:43
+#, php-format
+msgid ""
+"The selected interface (%s) has support for both the 2.4 and 5 GHz wireless "
+"bands."
+msgstr ""
+"Det valda gränssnittet (%s) har stöd för både 2,4 och 5 GHz trådlösa band."
+
+#: ajax/networking/get_nl80211_band.php:46
+#, php-format
+msgid "The selected interface (%s) does not support wireless mode operation."
+msgstr "Det valda gränssnittet (%s) stöder inte trådlös drift."
+
+#: app/lib/signprint.php:20
+msgid "Printable Wi-Fi sign"
+msgstr "Utskrivbar Wi-Fi-skylt"
+
+#: app/lib/signprint.php:37
+msgid "Wi-Fi Connect"
+msgstr "Wi-Fi-anslutning"
+
+#: app/lib/signprint.php:54
+msgid ""
+"To connect with your phone or tablet, scan the QR code above with your "
+"camera app."
+msgstr ""
+"För att ansluta med din telefon eller surfplatta, skanna QR-koden ovan med "
+"din kameraapp."
+
+#: app/lib/signprint.php:55
+msgid "For other devices, use the login credentials below."
+msgstr "För andra enheter använder du inloggningsuppgifterna nedan."
+
+#: app/lib/signprint.php:65 templates/ap_configuration.php:174
+#: templates/dashboard.php:729 templates/dashboard.php:1068
+msgid "Network"
+msgstr "Nätverk"
+
+#: app/lib/signprint.php:67 templates/ap_configuration.php:56
+#: templates/ap_configuration.php:147 templates/ap_configuration.php:175
+#: templates/dashboard.php:357 templates/dashboard.php:834
+#: templates/dashboard.php:1069 templates/hostapd.php:53
+#: templates/wifi_hotspot.php:70
+msgid "Security"
+msgstr "Säkerhet"
+
+#: app/lib/signprint.php:67 templates/wizard_uplink.php:158
+msgid "Password"
+msgstr "Lösenord"
+
+#: app/lib/signprint.php:68 templates/ap_configuration.php:57
+msgid "None (open network)"
+msgstr ""
+
+#: includes/dashboard.php:124
+msgid ""
+"DHCP settings are managed by the upstream router while Ethernet Bridge mode "
+"is active."
+msgstr ""
+
+#: includes/dashboard.php:127
+#, fuzzy
+msgid "System reboot requested. OpenAP will be temporarily unavailable."
+msgstr "Starta om nu? Systemet kommer att vara tillfälligt otillgängligt."
+
+#: includes/dashboard.php:192 includes/dashboard.php:295
+#, php-format
+msgid "%d WLAN %s"
+msgstr "%d WLAN %s"
+
+#: includes/dashboard.php:198 includes/dashboard.php:301
+#, php-format
+msgid "%d LAN %s"
+msgstr "%d LAN %s"
+
+#: includes/dashboard.php:257 templates/dashboard.php:720
+#: templates/dashboard.php:1170 templates/system.php:18
+#, fuzzy
+msgid "WiFi uplink"
+msgstr "WiFi-klient"
+
+#: includes/dashboard.php:257 templates/dashboard.php:42
+#: templates/dashboard.php:720
+#, fuzzy
+msgid "Ethernet uplink"
+msgstr "Ethernet"
+
+#: includes/dashboard.php:264
+msgid ""
+"Repeater mode requires one AP-capable and one managed-capable WiFi interface."
+msgstr ""
+
+#: includes/dashboard.php:265
+#, php-format
+msgid "Repeater mode requires at least 2 WiFi interfaces. Detected: %d."
+msgstr ""
+
+#: includes/dashboard.php:721
+#, fuzzy
+msgid "Invalid Encrypted DNS state."
+msgstr "Ogiltig start av DHCP-intervall."
+
+#: includes/dashboard.php:724
+msgid "Unsupported Encrypted DNS provider."
+msgstr ""
+
+#: includes/dashboard.php:734
+msgid "Unable to apply Encrypted DNS settings: "
+msgstr ""
+
+#: includes/dashboard.php:741
+#, fuzzy
+msgid "Encrypted DNS enabled successfully."
+msgstr "Fil \"%s\" borttagen framgångsrikt"
+
+#: includes/dashboard.php:742
+msgid "Encrypted DNS disabled; direct public DNS restored."
+msgstr ""
+
+#: includes/dashboard.php:819
+#, fuzzy
+msgid "Invalid service."
+msgstr "Ogiltigt gränssnittsnamn."
+
+#: includes/dashboard.php:826
+msgid "Unable to read this service log."
+msgstr ""
+
+#: includes/dashboard.php:828 templates/logging.php:45
+msgid "No recent log entries."
+msgstr ""
+
+#: includes/footer.php:6
+#, fuzzy, php-format
+msgid ""
+"OpenAP fork based on <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a>"
+msgstr "Skapad av <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a>"
+
+#: includes/footer.php:6
+msgid "RaspAP"
+msgstr "RaspAP"
+
+#: includes/footer.php:9
+msgid "OpenAP documentation"
+msgstr ""
+
+#: includes/navbar.php:65 templates/login.php:418
+msgid "Change light/dark theme"
+msgstr ""
+
+#: includes/navbar.php:67
+msgid "Theme"
+msgstr "Tema"
+
+#: includes/navbar.php:73
+msgid "Admin area"
+msgstr ""
+
+#: includes/navbar.php:88
+msgid "Quick navigation"
+msgstr ""
+
+#: includes/navbar.php:93 src/OpenAP/UI/Sidebar.php:18
+msgid "Dashboard"
+msgstr "Instrumentpanel"
+
+#: includes/navbar.php:98
+msgid "AP Config"
+msgstr ""
+
+#: includes/navbar.php:103 templates/dashboard.php:325
+msgid "DHCP"
+msgstr ""
+
+#: includes/navbar.php:113
+#, fuzzy
+msgid "Account settings"
+msgstr "Kontouppgifter"
+
+#: includes/navbar.php:114
+msgid "Manage administrator access"
+msgstr ""
+
+#: includes/navbar.php:118 templates/ap_configuration.php:133
+#: templates/ap_configuration.php:167 templates/dashboard.php:594
+#: templates/dashboard.php:642 templates/dashboard.php:1061
+#: templates/dashboard.php:1110 templates/dashboard.php:1140
+#: templates/dashboard.php:1162 templates/hostapd.php:93
+#: templates/system.php:269
+msgid "Close"
+msgstr "Nära"
+
+#: includes/navbar.php:131
+msgid "Credentials"
+msgstr ""
+
+#: includes/navbar.php:135 templates/admin.php:25
+msgid "Username"
+msgstr "Användarnamn"
+
+#: includes/navbar.php:137 templates/admin.php:28
+msgid "Please provide a valid username."
+msgstr "Ange ett giltigt användarnamn."
+
+#: includes/navbar.php:141
+#, fuzzy
+msgid "Current password"
+msgstr "Nytt lösenord"
+
+#: includes/navbar.php:145 templates/admin.php:39
+msgid "Please enter your old password."
+msgstr "Ange ditt gamla lösenord."
+
+#: includes/navbar.php:151 templates/admin.php:46
+msgid "New password"
+msgstr "Nytt lösenord"
+
+#: includes/navbar.php:155 templates/admin.php:51
+msgid "Please enter a new password."
+msgstr "Ange ett nytt lösenord."
+
+#: includes/navbar.php:159
+#, fuzzy
+msgid "Repeat password"
+msgstr "Upprepa nytt lösenord"
+
+#: includes/navbar.php:163 includes/navbar.php:217 includes/navbar.php:239
+#: templates/admin.php:63
+msgid "Please re-enter your new password."
+msgstr "Ange ditt nya lösenord igen."
+
+#: includes/navbar.php:171
+#, fuzzy
+msgid "Active session"
+msgstr "Aktiva DHCP-leasingavtal"
+
+#: includes/navbar.php:172
+msgid "End the current administrator session and return to login."
+msgstr ""
+
+#: includes/navbar.php:175 templates/admin.php:4
+msgid "Logout"
+msgstr "Logga ut"
+
+#: includes/navbar.php:181 templates/ap_configuration.php:151
+#: templates/system.php:275 templates/wizard_ap_ethernet.php:90
+#: templates/wizard_repeater.php:87
+msgid "Cancel"
+msgstr "Avbryt"
+
+#: includes/navbar.php:184 templates/admin.php:3 templates/hostapd.php:3
+msgid "Save settings"
+msgstr "Spara inställningar"
+
+#: includes/navbar.php:216
+msgid "Passwords do not match."
+msgstr ""
+
+#: includes/navbar.php:284
+msgid "Saving"
+msgstr ""
+
+#: includes/navbar.php:329
+#, fuzzy
+msgid "Please try again."
+msgstr "Ange en giltig nätmask"
+
+#: includes/navbar.php:330
+#, fuzzy
+msgid "Unable to update account settings."
+msgstr "Inställningar för mobildata"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:126
+#, php-format
+msgid "DHCP configuration for %s enabled."
+msgstr "DHCP-konfiguration för %s aktiverad."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:148
+msgid "WiFi repeater mode: A metric value is already defined for DHCP."
+msgstr "WiFi repeater-läge: Ett metriskt värde är redan definierat för DHCP."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:150
+#, php-format
+msgid "Metric value configured for the %s interface."
+msgstr "Metriskt värde konfigurerat för gränssnittet %s."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:226
+msgid "Invalid interface name."
+msgstr "Ogiltigt gränssnittsnamn."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:229
+msgid "Invalid static IP address."
+msgstr "Ogiltig statisk IP-adress."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:232
+msgid "Invalid subnet mask."
+msgstr "Ogiltig subnätmask."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:235
+msgid "Invalid default gateway."
+msgstr "Ogiltig standardgateway."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:239
+msgid "Invalid DHCP range start."
+msgstr "Ogiltig start av DHCP-intervall."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:242
+msgid "Invalid DHCP range end."
+msgstr "Ogiltigt slut på DHCP-intervall."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:245
+msgid "Invalid DHCP lease time, not a number."
+msgstr "Ogiltig DHCP-lease-tid, inte ett tal."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:248
+msgid "Unknown DHCP lease time unit."
+msgstr "Okänd enhet för DHCP-lease-tid."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:251
+msgid "Invalid metric value, not a number."
+msgstr "Ogiltigt metriskt värde, inte ett tal."
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:276
+#, php-format
+msgid "DHCP configuration for %s updated."
+msgstr "DHCP-konfiguration för %s uppdaterad."
+
+#: src/OpenAP/Networking/Hotspot/DnsmasqManager.php:289
+msgid "Invalid MAC address: "
+msgstr "Ogiltig MAC-adress: "
+
+#: src/OpenAP/Networking/Hotspot/DnsmasqManager.php:292
+msgid "Duplicate IP address entered: "
+msgstr "Duplikat av IP-adress inmatad: "
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:111
+msgid "WPA and WPA2"
+msgstr "WPA och WPA2"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:112
+msgid "WPA2 and WPA3-Personal (transitional mode)"
+msgstr "WPA2 och WPA3-Personal (övergångsläge)"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:114
+#: templates/ap_configuration.php:147 templates/ap_configuration.php:148
+msgid "None"
+msgstr "Ingen"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:124
+#: templates/dhcp_setting.php:76
+msgid "Disabled"
+msgstr "Inaktiverad"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:125
+msgid "Enabled (for supported clients)"
+msgstr "Aktiverad (för klienter som stöds)"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:126
+msgid "Required (for supported clients)"
+msgstr "Krävs (för klienter som stöds)"
+
+#: src/OpenAP/Networking/Hotspot/WiFiManager.php:384
+msgid "Signal strength"
+msgstr "Signalstyrka"
+
+#: src/OpenAP/UI/Dashboard.php:79 src/OpenAP/UI/Dashboard.php:99
+msgid "No MAC Address Found"
+msgstr "Ingen MAC-adress hittades"
+
+#: src/OpenAP/UI/Dashboard.php:82 src/OpenAP/UI/Dashboard.php:126
+msgid "No IPv6 Address Found"
+msgstr "Ingen IPv6-adress hittades"
+
+#: src/OpenAP/UI/Dashboard.php:259
+msgid "client"
+msgid_plural "clients"
+msgstr[0] "Klient"
+msgstr[1] "Kunder"
+
+#: src/OpenAP/UI/Sidebar.php:19 templates/ap_configuration.php:30
+#, fuzzy
+msgid "AP Configuration"
+msgstr "Konfigurationer"
+
+#: src/OpenAP/UI/Sidebar.php:22 templates/dhcp_setting.php:103
+#, fuzzy
+msgid "DHCP Setting"
+msgstr "APN-inställningar"
+
+#: src/OpenAP/UI/Sidebar.php:25 templates/dashboard.php:836
+#: templates/hostapd.php:55 templates/hostapd/logging.php:3
+#: templates/logging.php:32
+msgid "Logging"
+msgstr "Loggning"
+
+#: src/OpenAP/UI/Sidebar.php:28
+msgid "DHCP Server"
+msgstr "DHCP-server"
+
+#: src/OpenAP/UI/Sidebar.php:31
+msgid "Ad Blocking"
+msgstr "Blockering av annonser"
+
+#: src/OpenAP/UI/Sidebar.php:34
+msgid "Networking"
+msgstr "Nätverkande"
+
+#: src/OpenAP/UI/Sidebar.php:37
+msgid "WiFi client"
+msgstr "WiFi-klient"
+
+#: src/OpenAP/UI/Sidebar.php:40
+msgid "OpenVPN"
+msgstr "OpenVPN"
+
+#: src/OpenAP/UI/Sidebar.php:43
+msgid "WireGuard"
+msgstr "WireGuard"
+
+#: src/OpenAP/UI/Sidebar.php:49
+msgid "Data usage"
+msgstr "Dataanvändning"
+
+#: src/OpenAP/UI/Sidebar.php:52
+msgid "RestAPI"
+msgstr "RestAPI"
+
+#: src/OpenAP/UI/Sidebar.php:55 templates/system.php:32
+msgid "System"
+msgstr "System"
+
+#: src/OpenAP/UI/Sidebar.php:58 templates/about/general.php:5
+#, fuzzy
+msgid "About OpenAP"
+msgstr "Om RaspAP"
+
+#: templates/about/general.php:5
+msgid "Project identity and attribution"
+msgstr ""
+
+#: templates/about/general.php:11 templates/about/general.php:15
+#, fuzzy
+msgid "OpenAP"
+msgstr "OpenVPN"
+
+#: templates/about/general.php:14
+#, fuzzy
+msgid "Open wireless access point"
+msgstr "Öppen inloggning för Tailscale"
+
+#: templates/about/general.php:17
+msgid ""
+"A responsive control panel for access points, Ethernet uplinks and WiFi "
+"repeater deployments."
+msgstr ""
+
+#: templates/about/general.php:20
+msgid "Check for update"
+msgstr "Kontrollera för uppdatering"
+
+#: templates/about/general.php:29
+msgid "About the project"
+msgstr ""
+
+#: templates/about/general.php:29
+msgid "OpenAP profile and purpose"
+msgstr ""
+
+#: templates/about/general.php:32
+msgid ""
+"OpenAP is adapted for existing hostapd installations and for systems where "
+"network interfaces must be discovered by capability and hardware identity "
+"rather than fixed Linux names."
+msgstr ""
+
+#: templates/about/general.php:33
+msgid ""
+"The current project supports a dedicated WiFi access point over Ethernet and "
+"a validated two-radio WiFi repeater workflow, while preserving a clear "
+"separation between the web interface and privileged network helpers."
+msgstr ""
+
+#: templates/about/general.php:40
+msgid "Upstream project and attribution"
+msgstr ""
+
+#: templates/about/general.php:40
+msgid "Open source foundations"
+msgstr ""
+
+#: templates/about/general.php:44
+#, php-format
+msgid ""
+"OpenAP is a fork based on RaspAP, a co-creation of %1$s and %2$s with "
+"contributions from the %3$s and %4$s."
+msgstr ""
+
+#: templates/about/general.php:47
+msgid "developer community"
+msgstr "utvecklargemenskap"
+
+#: templates/about/general.php:48
+msgid "language translators"
+msgstr "språköversättare"
+
+#: templates/about/general.php:52
+msgid ""
+"RaspAP attribution and the GPL-3.0 license are retained as part of the "
+"OpenAP source and distribution."
+msgstr ""
+
+#: templates/about/general.php:68
+msgid "OpenAP release"
+msgstr ""
+
+#: templates/about/general.php:68
+#, fuzzy
+msgid "Installed web interface"
+msgstr "Ogiltigt gränssnittsnamn."
+
+#: templates/about/general.php:72
+msgid "Version"
+msgstr "Version"
+
+#: templates/about/general.php:74
+msgid "Installed"
+msgstr "Installerad"
+
+#: templates/about/general.php:77
+msgid "Project"
+msgstr ""
+
+#: templates/about/general.php:85
+msgid "OpenAP links"
+msgstr ""
+
+#: templates/about/general.php:85
+msgid "Official project resources"
+msgstr ""
+
+#: templates/about/general.php:90
+#, fuzzy
+msgid "Documentation"
+msgstr "Autentisering"
+
+#: templates/about/general.php:100
+msgid "License"
+msgstr "Licens"
+
+#: templates/about/general.php:100
+msgid "Free and open source"
+msgstr ""
+
+#: templates/about/general.php:105
+msgid ""
+"You may use, study, modify and redistribute the software under its license "
+"terms."
+msgstr ""
+
+#: templates/about/general.php:106
+#, fuzzy
+msgid "Read license"
+msgstr "Licens"
+
+#: templates/admin.php:14
+msgid "Authentication"
+msgstr "Autentisering"
+
+#: templates/admin.php:20
+#, fuzzy
+msgid "Authentication settings"
+msgstr "Autentisering"
+
+#: templates/admin.php:34
+msgid "Old password"
+msgstr "Gammalt lösenord"
+
+#: templates/admin.php:58
+msgid "Repeat new password"
+msgstr "Upprepa nytt lösenord"
+
+#: templates/ap_configuration.php:30
+#, fuzzy
+msgid "Wireless access point settings"
+msgstr "Routning för trådlöst LAN"
+
+#: templates/ap_configuration.php:41 templates/dashboard.php:833
+#: templates/dhcp_setting.php:117 templates/hostapd.php:52
+msgid "Basic"
+msgstr "Grundläggande"
+
+#: templates/ap_configuration.php:43 templates/dashboard.php:845
+#: templates/hostapd/basic.php:16 templates/repeater.php:80
+#: templates/repeater.php:110 templates/repeater.php:126
+#: templates/wizard_repeater.php:52 templates/wizard_uplink.php:154
+msgid "SSID"
+msgstr "SSID"
+
+#: templates/ap_configuration.php:44 templates/dashboard.php:340
+#: templates/dashboard.php:849 templates/wifi_hotspot.php:62
+msgid "Band"
+msgstr ""
+
+#: templates/ap_configuration.php:45 templates/dashboard.php:347
+#: templates/dashboard.php:857 templates/wifi_hotspot.php:62
+msgid "Ch"
+msgstr ""
+
+#: templates/ap_configuration.php:48 templates/dashboard.php:880
+#: templates/hostapd/basic.php:67
+msgid "Wireless Mode"
+msgstr "Trådlöst läge"
+
+#: templates/ap_configuration.php:49 templates/dashboard.php:351
+#: templates/dashboard.php:887
+msgid "Width"
+msgstr ""
+
+#: templates/ap_configuration.php:50 templates/dashboard.php:893
+msgid "TX dBm"
+msgstr ""
+
+#: templates/ap_configuration.php:57 templates/dashboard.php:906
+#, fuzzy
+msgid "Security Type"
+msgstr "Typ av säkerhet"
+
+#: templates/ap_configuration.php:57 templates/ap_configuration.php:148
+#: templates/dashboard.php:910
+#, fuzzy
+msgid "Encryption"
+msgstr "Krypteringstyp"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:916
+#, fuzzy
+msgid "Pre-shared Key (PSK)"
+msgstr "Förhandsdelad nyckel (PSK)"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:919
+msgid "Toggle visibility"
+msgstr ""
+
+#: templates/ap_configuration.php:58
+msgid "Toggle password visibility"
+msgstr ""
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:922
+#, fuzzy
+msgid "WiFi QR code"
+msgstr "WiFi-klient"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:922
+msgid "Open WiFi QR code"
+msgstr ""
+
+#: templates/ap_configuration.php:59
+msgid ""
+"Open networks have no password or traffic encryption. Anyone within range "
+"can connect."
+msgstr ""
+
+#: templates/ap_configuration.php:59
+msgid "WPA2-PSK with AES/CCMP is used for client compatibility."
+msgstr ""
+
+#: templates/ap_configuration.php:64 templates/ap_configuration.php:69
+#: templates/dashboard.php:984
+#, fuzzy
+msgid "AP Isolation"
+msgstr "Aktivera AP-isolering"
+
+#: templates/ap_configuration.php:65
+msgid "Prevents wireless clients from communicating directly with each other."
+msgstr ""
+
+#: templates/ap_configuration.php:76 templates/ap_configuration.php:81
+msgid "Hidden SSID"
+msgstr ""
+
+#: templates/ap_configuration.php:77
+msgid "Stops the network name from appearing in normal WiFi scans."
+msgstr ""
+
+#: templates/ap_configuration.php:90 templates/dashboard.php:1035
+#, fuzzy
+msgid "Restart"
+msgstr "Starta om dnsmasq"
+
+#: templates/ap_configuration.php:91 templates/dashboard.php:1043
+#: templates/dhcp_setting.php:180 templates/wizard_ap_ethernet.php:94
+msgid "Save"
+msgstr "Spara"
+
+#: templates/ap_configuration.php:107 templates/dashboard.php:129
+#: templates/dhcp_setting.php:252 templates/logging.php:56
+#, fuzzy
+msgid "DHCP setting"
+msgstr "Inställningar för DHCP-server"
+
+#: templates/ap_configuration.php:107 templates/dashboard.php:130
+#: templates/dhcp_setting.php:103 templates/dhcp_setting.php:252
+#: templates/logging.php:56
+#, fuzzy
+msgid "Hotspot address pool"
+msgstr "Kontroll av MAC-adress"
+
+#: templates/ap_configuration.php:111 templates/dashboard.php:148
+#: templates/dhcp_setting.php:256 templates/logging.php:57
+#, fuzzy
+msgid "Leases active"
+msgstr "Hyrestid"
+
+#: templates/ap_configuration.php:112 templates/dashboard.php:151
+#: templates/dhcp_setting.php:257 templates/logging.php:57
+#, fuzzy
+msgid "Lease"
+msgstr "Hyrestid"
+
+#: templates/ap_configuration.php:114 templates/dashboard.php:155
+#: templates/dhcp_setting.php:259
+#, fuzzy
+msgid "DHCP leases in use"
+msgstr "Aktiva DHCP-leasingavtal"
+
+#: templates/ap_configuration.php:116 templates/dashboard.php:165
+#: templates/dhcp_setting.php:261 templates/logging.php:59
+msgid "Pool"
+msgstr ""
+
+#: templates/ap_configuration.php:128
+#, fuzzy
+msgid "Open network"
+msgstr "Nätverk"
+
+#: templates/ap_configuration.php:129
+msgid "Confirm hotspot security"
+msgstr ""
+
+#: templates/ap_configuration.php:137
+#, fuzzy
+msgid "Security mode"
+msgstr "Typ av säkerhet"
+
+#: templates/ap_configuration.php:141
+msgid "No password or encryption"
+msgstr ""
+
+#: templates/ap_configuration.php:142
+msgid ""
+"Anyone within range will be able to connect to this hotspot and inspect "
+"unencrypted wireless traffic."
+msgstr ""
+
+#: templates/ap_configuration.php:145
+msgid "Only continue if an open network is intentional."
+msgstr ""
+
+#: templates/ap_configuration.php:152
+msgid "Create open network"
+msgstr ""
+
+#: templates/ap_configuration.php:164 templates/dashboard.php:1058
+#, fuzzy
+msgid "WiFi access"
+msgstr "WiFi-klient"
+
+#: templates/ap_configuration.php:171 templates/dashboard.php:1065
+msgid "OpenAP WiFi QR code"
+msgstr ""
+
+#: templates/ap_configuration.php:177 templates/dashboard.php:1071
+msgid "Scan with a phone camera to join the hotspot."
+msgstr ""
+
+#: templates/ap_configuration.php:180 templates/dashboard.php:1074
+msgid "Open full page"
+msgstr ""
+
+#: templates/ap_configuration.php:181 templates/dashboard.php:1075
+#, fuzzy
+msgid "Download SVG"
+msgstr "Nedladdningar"
+
+#: templates/clients.php:5
+#, fuzzy
+msgid "Hotspot clients"
+msgstr "Hotspot"
+
+#: templates/clients.php:12 templates/dashboard.php:527 templates/system.php:93
+msgid "Hostname"
+msgstr "Värdnamn"
+
+#: templates/clients.php:13 templates/dashboard.php:528
+#: templates/repeater.php:53 templates/repeater.php:112
+msgid "IP"
+msgstr ""
+
+#: templates/clients.php:14 templates/dashboard.php:530
+#: templates/repeater.php:52 templates/repeater.php:77
+#: templates/wizard_repeater.php:27 templates/wizard_repeater.php:36
+#: templates/wizard_repeater.php:49
+msgid "MAC"
+msgstr ""
+
+#: templates/clients.php:15 templates/dashboard.php:531
+#: templates/repeater.php:114 templates/wizard_uplink.php:35
+msgid "Signal"
+msgstr ""
+
+#: templates/clients.php:16
+msgid "RX rate"
+msgstr ""
+
+#: templates/clients.php:17
+msgid "TX rate"
+msgstr ""
+
+#: templates/clients.php:18 templates/dashboard.php:475
+#: templates/dashboard.php:666 templates/wizard_ap_ethernet.php:85
+msgid "Connected"
+msgstr "Ansluten"
+
+#: templates/clients.php:19 templates/repeater.php:111
+#: templates/repeater.php:127 templates/system.php:133
+#, fuzzy
+msgid "State"
+msgstr "Status"
+
+#: templates/clients.php:37
+msgid "No hotspot clients found."
+msgstr ""
+
+#: templates/clients.php:44
+#, fuzzy
+msgid "Information provided by hostapd, dnsmasq and ARP."
+msgstr "Information som tillhandahålls av hostapd"
+
+#: templates/dashboard.php:42
+msgid "Uplink AP"
+msgstr ""
+
+#: templates/dashboard.php:45
+msgid "Uplink unavailable"
+msgstr ""
+
+#: templates/dashboard.php:61 templates/wifi_hotspot.php:16
+#: templates/wizard_ap_ethernet.php:35 templates/wizard_ap_ethernet.php:56
+#, fuzzy
+msgid "Ethernet Bridge"
+msgstr "Ethernet"
+
+#: templates/dashboard.php:62 templates/dashboard.php:276
+#: templates/wifi_hotspot.php:16 templates/wizard_ap_ethernet.php:86
+#, fuzzy
+msgid "AP Ethernet"
+msgstr "Ethernet"
+
+#: templates/dashboard.php:62 templates/repeater.php:6
+#: templates/wifi_hotspot.php:16
+msgid "Repeater"
+msgstr "Repeater"
+
+#: templates/dashboard.php:64 templates/logging.php:33
+#: templates/wifi_hotspot.php:33
+msgid "Live"
+msgstr ""
+
+#: templates/dashboard.php:88 templates/dashboard.php:138
+#: templates/dashboard.php:516
+#, fuzzy
+msgid "Upstream DHCP"
+msgstr "DNS-servrar uppströms"
+
+#: templates/dashboard.php:130
+msgid "Upstream managed"
+msgstr ""
+
+#: templates/dashboard.php:141
+msgid "Addresses and leases are managed by the upstream router."
+msgstr ""
+
+#: templates/dashboard.php:162
+msgid "Managed upstream"
+msgstr ""
+
+#: templates/dashboard.php:163
+msgid "Local DHCP disabled"
+msgstr ""
+
+#: templates/dashboard.php:187
+#, fuzzy
+msgid "Network Topology"
+msgstr "Nätverkande"
+
+#: templates/dashboard.php:187
+#, fuzzy
+msgid "Interfaces and connectivity"
+msgstr "Internetanslutning"
+
+#: templates/dashboard.php:191 templates/wifi_hotspot.php:29
+msgid "Status"
+msgstr "Status"
+
+#: templates/dashboard.php:191 templates/wifi_hotspot.php:29
+msgid "Healthy"
+msgstr ""
+
+#: templates/dashboard.php:191 templates/dhcp_setting.php:76
+#: templates/wifi_hotspot.php:29
+msgid "Degraded"
+msgstr ""
+
+#: templates/dashboard.php:207 templates/dashboard.php:221
+#, fuzzy
+msgid "Active"
+msgstr "Aktivera"
+
+#: templates/dashboard.php:207 templates/dashboard.php:221
+#, fuzzy
+msgid "Interrupted"
+msgstr "Gränssnitt"
+
+#: templates/dashboard.php:209 templates/dashboard.php:1175
+#, fuzzy
+msgid "Internet"
+msgstr "Ethernet"
+
+#: templates/dashboard.php:210
+msgid "Upstream"
+msgstr ""
+
+#: templates/dashboard.php:210
+msgid "Offline"
+msgstr ""
+
+#: templates/dashboard.php:253 templates/dashboard.php:376
+#: templates/repeater.php:131 templates/wifi_hotspot.php:78
+msgid "Clients"
+msgstr "Kunder"
+
+#: templates/dashboard.php:264 templates/dashboard.php:270
+#, fuzzy
+msgid "Operating Mode"
+msgstr "Uppdatering av källor"
+
+#: templates/dashboard.php:265
+msgid "Choose the active uplink path"
+msgstr ""
+
+#: templates/dashboard.php:269
+#, fuzzy
+msgid "● Bridge"
+msgstr "Överbryggad"
+
+#: templates/dashboard.php:269
+msgid "● Routed / NAT"
+msgstr ""
+
+#: templates/dashboard.php:283
+#, fuzzy
+msgid "Configure repeater mode"
+msgstr "Konfigurera ny utgångsnod"
+
+#: templates/dashboard.php:283
+msgid "Switch AP Ethernet to Routed / NAT first"
+msgstr ""
+
+#: templates/dashboard.php:283
+msgid "Repeater mode requires at least 2 WiFi interfaces."
+msgstr ""
+
+#: templates/dashboard.php:285 templates/dashboard.php:1131
+#, fuzzy
+msgid "Repeater Mode"
+msgstr "Repeater"
+
+#: templates/dashboard.php:286
+msgid "Routed first"
+msgstr ""
+
+#: templates/dashboard.php:286
+msgid "2 WiFi required"
+msgstr ""
+
+#: templates/dashboard.php:297 templates/wifi_hotspot.php:25
+#: templates/wifi_hotspot.php:39
+#, fuzzy
+msgid "WiFi Hotspot"
+msgstr "Hotspot"
+
+#: templates/dashboard.php:305 templates/wifi_hotspot.php:51
+msgid "Running"
+msgstr ""
+
+#: templates/dashboard.php:307 templates/wifi_hotspot.php:53
+#, fuzzy
+msgid "Stopped"
+msgstr "Stoppa fångst"
+
+#: templates/dashboard.php:310 templates/wifi_hotspot.php:55
+msgid "Hidden"
+msgstr ""
+
+#: templates/dashboard.php:317
+#, fuzzy
+msgid "Restart AP service"
+msgstr "Starta RestAPI-tjänsten"
+
+#: templates/dashboard.php:318 templates/repeater.php:82
+#: templates/wizard_repeater.php:54
+msgid "AP"
+msgstr "AP"
+
+#: templates/dashboard.php:324
+#, fuzzy
+msgid "Restart DHCP/DNS service"
+msgstr "Starta RestAPI-tjänsten"
+
+#: templates/dashboard.php:328
+msgid "Show AP and DHCP logs"
+msgstr ""
+
+#: templates/dashboard.php:329
+msgid "Logs"
+msgstr ""
+
+#: templates/dashboard.php:332
+#, fuzzy
+msgid "Configure"
+msgstr "Konfigurera enheten"
+
+#: templates/dashboard.php:370 templates/wifi_hotspot.php:74
+msgid "TX Power"
+msgstr ""
+
+#: templates/dashboard.php:379 templates/dashboard.php:641
+#: templates/wifi_hotspot.php:78
+#, fuzzy
+msgid "connected"
+msgstr "Ansluten"
+
+#: templates/dashboard.php:391 templates/repeater.php:105
+#: templates/wifi_hotspot.php:83 templates/wizard_ap_ethernet.php:85
+msgid "Uplink"
+msgstr ""
+
+#: templates/dashboard.php:400 templates/wifi_hotspot.php:89
+#, fuzzy
+msgid "Not connected"
+msgstr "Ansluten"
+
+#: templates/dashboard.php:414
+msgid "Live Network Traffic"
+msgstr ""
+
+#: templates/dashboard.php:415
+msgid "Real-time throughput by interface"
+msgstr ""
+
+#: templates/dashboard.php:438 templates/dashboard.php:480
+msgid "Download"
+msgstr "Nedladdningar"
+
+#: templates/dashboard.php:442 templates/dashboard.php:484
+msgid "Upload"
+msgstr "Ladda upp"
+
+#: templates/dashboard.php:454 templates/dashboard.php:496
+msgid "Traffic total"
+msgstr ""
+
+#: templates/dashboard.php:456 templates/dashboard.php:498
+#, fuzzy
+msgid "since interface start"
+msgstr "gränssnitt"
+
+#: templates/dashboard.php:475
+msgid "Disconnected"
+msgstr "Frånkopplad"
+
+#: templates/dashboard.php:511 templates/dashboard.php:589
+#, fuzzy
+msgid "Connected Clients"
+msgstr "Ansluten"
+
+#: templates/dashboard.php:511
+msgid "Associated hotspot devices"
+msgstr ""
+
+#: templates/dashboard.php:514
+msgid "total"
+msgstr ""
+
+#: templates/dashboard.php:518
+msgid "leased"
+msgstr ""
+
+#: templates/dashboard.php:529
+#, fuzzy
+msgid "Traffic"
+msgstr "All trafik"
+
+#: templates/dashboard.php:552 templates/dashboard.php:617
+msgid "Total"
+msgstr ""
+
+#: templates/dashboard.php:552 templates/dashboard.php:617
+#, fuzzy
+msgid "Top usage"
+msgstr "Dataanvändning"
+
+#: templates/dashboard.php:560 templates/dashboard.php:626
+msgid "Online"
+msgstr ""
+
+#: templates/dashboard.php:569 templates/dashboard.php:635
+#, fuzzy
+msgid "No clients connected"
+msgstr "Frånkopplad"
+
+#: templates/dashboard.php:577
+#, fuzzy
+msgid "View all clients"
+msgstr "Inställningar för brandvägg"
+
+#: templates/dashboard.php:590
+#, php-format
+msgid "%d devices currently associated with the hotspot"
+msgstr ""
+
+#: templates/dashboard.php:608
+#, fuzzy
+msgid "Unknown device"
+msgstr "Konfigurera enheten"
+
+#: templates/dashboard.php:636
+msgid "Associated hotspot devices will appear here."
+msgstr ""
+
+#: templates/dashboard.php:658
+#, fuzzy
+msgid "Connected clients"
+msgstr "Ansluten"
+
+#: templates/dashboard.php:659
+#, fuzzy
+msgid "Stations on the hotspot"
+msgstr "Starta hotspot"
+
+#: templates/dashboard.php:667
+#, fuzzy
+msgid "WiFi stations"
+msgstr "Inga Wifi-stationer hittades"
+
+#: templates/dashboard.php:687
+#, fuzzy
+msgid "Hotspot traffic"
+msgstr "Hotspot"
+
+#: templates/dashboard.php:688
+msgid "Totals since interface start"
+msgstr ""
+
+#: templates/dashboard.php:695
+msgid "Sent"
+msgstr ""
+
+#: templates/dashboard.php:696
+#, fuzzy
+msgid "AP → clients"
+msgstr "Klient"
+
+#: templates/dashboard.php:703
+#, fuzzy
+msgid "Received"
+msgstr "Ta emot"
+
+#: templates/dashboard.php:704
+#, fuzzy
+msgid "Clients → AP"
+msgstr "Kunder"
+
+#: templates/dashboard.php:710
+msgid "Sent through the uplink"
+msgstr ""
+
+#: templates/dashboard.php:710
+msgid "Uplink sent"
+msgstr ""
+
+#: templates/dashboard.php:711
+msgid "Received through the uplink"
+msgstr ""
+
+#: templates/dashboard.php:711
+msgid "Uplink received"
+msgstr ""
+
+#: templates/dashboard.php:721 templates/wizard_ap_ethernet.php:69
+msgid "Active network path"
+msgstr ""
+
+#: templates/dashboard.php:737 templates/dashboard.php:754
+#: templates/dhcp_setting.php:120 templates/hostapd/advanced.php:52
+#: templates/repeater.php:141
+msgid "Gateway"
+msgstr "Gateway"
+
+#: templates/dashboard.php:738 templates/dashboard.php:755
+#, fuzzy
+msgid "Default route"
+msgstr "Standard-gateway"
+
+#: templates/dashboard.php:746 templates/hostapd/basic.php:5
+#: templates/repeater.php:76 templates/repeater.php:108
+#: templates/repeater.php:124 templates/wizard_ap_ethernet.php:68
+#: templates/wizard_repeater.php:26 templates/wizard_repeater.php:35
+#: templates/wizard_repeater.php:48 templates/wizard_uplink.php:150
+msgid "Interface"
+msgstr "Gränssnitt"
+
+#: templates/dashboard.php:772 templates/system.php:212
+#, fuzzy
+msgid "System health"
+msgstr "Systemtema"
+
+#: templates/dashboard.php:773 templates/system.php:213
+msgid "Live resource usage"
+msgstr ""
+
+#: templates/dashboard.php:778 templates/system.php:218
+#, fuzzy
+msgid "CPU used"
+msgstr "CPU-belastning"
+
+#: templates/dashboard.php:779 templates/system.php:219
+msgid "RAM used"
+msgstr ""
+
+#: templates/dashboard.php:780 templates/system.php:80 templates/system.php:220
+msgid "Temperature"
+msgstr ""
+
+#: templates/dashboard.php:781 templates/system.php:99 templates/system.php:221
+msgid "Uptime"
+msgstr "Drifttid"
+
+#: templates/dashboard.php:785 templates/system.php:75 templates/system.php:225
+msgid "Disk"
+msgstr ""
+
+#: templates/dashboard.php:786 templates/system.php:226
+#, fuzzy
+msgid "Load"
+msgstr "CPU-belastning"
+
+#: templates/dashboard.php:817
+#, fuzzy
+msgid "WiFi Hotspot Settings"
+msgstr "Redigera ruttinställningar"
+
+#: templates/dashboard.php:832
+#, fuzzy
+msgid "WiFi hotspot settings"
+msgstr "Redigera ruttinställningar"
+
+#: templates/dashboard.php:835 templates/hostapd.php:54
+msgid "Advanced"
+msgstr "Avancerad"
+
+#: templates/dashboard.php:872
+msgid "No channels available"
+msgstr ""
+
+#: templates/dashboard.php:937
+msgid "recommended for compatibility"
+msgstr ""
+
+#: templates/dashboard.php:945
+msgid "Country"
+msgstr "Land"
+
+#: templates/dashboard.php:949
+#, fuzzy
+msgid "Beacon Interval"
+msgstr "Intervall för sändare"
+
+#: templates/dashboard.php:959
+msgid "RTS Threshold"
+msgstr ""
+
+#: templates/dashboard.php:963
+msgid "Frag. Threshold"
+msgstr ""
+
+#: templates/dashboard.php:967
+msgid "Max STA"
+msgstr ""
+
+#: templates/dashboard.php:973
+#, fuzzy
+msgid "Options"
+msgstr "Åtgärder"
+
+#: templates/dashboard.php:990
+#, fuzzy
+msgid "Ign. Broadcast"
+msgstr "Dölj SSID i broadcast"
+
+#: templates/dashboard.php:996
+msgid "Probe Resp."
+msgstr ""
+
+#: templates/dashboard.php:1003
+#, fuzzy
+msgid "Edit full configuration in"
+msgstr "Konfiguration av brygggränssnitt"
+
+#: templates/dashboard.php:1014
+msgid "Enable logging"
+msgstr "Aktivera loggning"
+
+#: templates/dashboard.php:1016
+msgid "live"
+msgstr ""
+
+#: templates/dashboard.php:1021
+#, fuzzy
+msgid "Started"
+msgstr "Starta WireGuard"
+
+#: templates/dashboard.php:1024
+msgid "Full log"
+msgstr ""
+
+#: templates/dashboard.php:1089
+msgid "AP and DHCP logs"
+msgstr ""
+
+#: templates/dashboard.php:1093
+msgid "No recent AP/DHCP logs."
+msgstr ""
+
+#: templates/dashboard.php:1105 templates/dashboard.php:1116
+#: templates/wizard_ap_ethernet.php:17
+#, fuzzy
+msgid "AP via Ethernet"
+msgstr "Ethernet"
+
+#: templates/dashboard.php:1106
+#, fuzzy
+msgid "Configure wired uplink"
+msgstr "Konfigurera enheten"
+
+#: templates/dashboard.php:1117
+#, fuzzy
+msgid "Loading configuration..."
+msgstr "Konfigurationer"
+
+#: templates/dashboard.php:1132
+msgid "Select the WiFi uplink network"
+msgstr ""
+
+#: templates/dashboard.php:1137 templates/repeater.php:23
+#, fuzzy
+msgid "Change uplink"
+msgstr "Kanal"
+
+#: templates/dashboard.php:1150
+msgid "Scanning for available networks"
+msgstr ""
+
+#: templates/dashboard.php:1164
+#, fuzzy
+msgid "Restoring Internet connection"
+msgstr "Internetanslutning"
+
+#: templates/dashboard.php:1165
+msgid "The OpenAP hotspot remains active while the uplink recovers."
+msgstr ""
+
+#: templates/dashboard.php:1180
+msgid "WiFi uplink is unavailable"
+msgstr ""
+
+#: templates/dashboard.php:1181
+msgid "OpenAP is checking the saved network"
+msgstr ""
+
+#: templates/dashboard.php:1185
+msgid "Uplink loss detected"
+msgstr ""
+
+#: templates/dashboard.php:1186
+msgid "Trying the saved WiFi uplink"
+msgstr ""
+
+#: templates/dashboard.php:1187
+msgid "Waiting for IP and Internet"
+msgstr ""
+
+#: templates/dashboard.php:1192
+msgid "AP Ethernet fallback"
+msgstr ""
+
+#: templates/dashboard.php:1193
+#, fuzzy
+msgid "Checking the Ethernet connection…"
+msgstr "Internetanslutning"
+
+#: templates/dashboard.php:1196
+msgid "Switch to AP Ethernet"
+msgstr ""
+
+#: templates/dashboard.php:1209
+#, fuzzy
+msgid "System is rebooting"
+msgstr "Omstart av systemet"
+
+#: templates/dashboard.php:1211
+msgid "Waiting for OpenAP to become reachable again."
+msgstr ""
+
+#: templates/dashboard.php:1248
+msgid "Connection restored. Reloading dashboard..."
+msgstr ""
+
+#: templates/dashboard.php:1268
+msgid "Reboot command sent. Waiting for services to restart..."
+msgstr ""
+
+#: templates/dashboard.php:1273
+msgid "OpenAP is going offline..."
+msgstr ""
+
+#: templates/dashboard.php:1274
+msgid "Reconnecting to OpenAP..."
+msgstr ""
+
+#: templates/dhcp_setting.php:42 templates/dhcp_setting.php:52
+#: templates/dhcp_setting.php:169
+#, fuzzy
+msgid "Local DNS"
+msgstr "Lokal hamn"
+
+#: templates/dhcp_setting.php:42 templates/dhcp_setting.php:169
+msgid "External DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:73
+msgid "Ready, not enforced"
+msgstr ""
+
+#: templates/dhcp_setting.php:75
+#, fuzzy
+msgid "Protected"
+msgstr "Ansluten"
+
+#: templates/dhcp_setting.php:108
+#, fuzzy
+msgid "Ethernet Bridge mode"
+msgstr "AP-läge med överbryggning"
+
+#: templates/dhcp_setting.php:108
+msgid ""
+"Subnet, gateway, DHCP pool and client DNS are assigned by the upstream "
+"router. The values below are shown for reference and cannot be edited."
+msgstr ""
+
+#: templates/dhcp_setting.php:119
+#, fuzzy
+msgid "Hotspot subnet"
+msgstr "Hotspot"
+
+#: templates/dhcp_setting.php:121
+#, fuzzy
+msgid "AP interface"
+msgstr "gränssnitt"
+
+#: templates/dhcp_setting.php:126
+#, fuzzy
+msgid "DHCP Pool"
+msgstr "DHCP-alternativ"
+
+#: templates/dhcp_setting.php:128
+#, fuzzy
+msgid "Range start"
+msgstr "Status för bakluckan"
+
+#: templates/dhcp_setting.php:129
+msgid "Range end"
+msgstr ""
+
+#: templates/dhcp_setting.php:130
+#, fuzzy
+msgid "Lease time"
+msgstr "Hyrestid"
+
+#: templates/dhcp_setting.php:135 templates/dhcp_setting.php:140
+msgid "Protected DNS path"
+msgstr ""
+
+#: templates/dhcp_setting.php:135
+msgid "Standard DNS (compatibility)"
+msgstr ""
+
+#: templates/dhcp_setting.php:143
+#, fuzzy
+msgid "Client DNS"
+msgstr "Klient-ID"
+
+#: templates/dhcp_setting.php:149
+#, fuzzy
+msgid "Encrypted proxy"
+msgstr "Krypteringstyp"
+
+#: templates/dhcp_setting.php:155
+msgid "Secure provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:161 templates/dhcp_setting.php:216
+#, fuzzy
+msgid "Transport"
+msgstr "Översättare"
+
+#: templates/dhcp_setting.php:165
+msgid "These values are managed automatically while Encrypted DNS is active."
+msgstr ""
+
+#: templates/dhcp_setting.php:168
+#, fuzzy
+msgid "DNS provider"
+msgstr "DNS-server"
+
+#: templates/dhcp_setting.php:168
+msgid "Custom"
+msgstr ""
+
+#: templates/dhcp_setting.php:169
+msgid "DNS policy"
+msgstr ""
+
+#: templates/dhcp_setting.php:170
+msgid "Advertised DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:171
+#, fuzzy
+msgid "Upstream DNS"
+msgstr "DNS-servrar uppströms"
+
+#: templates/dhcp_setting.php:173
+msgid ""
+"Standard DNS uses unencrypted port 53 and may be intercepted or redirected "
+"by the network provider."
+msgstr ""
+
+#: templates/dhcp_setting.php:179
+msgid "Managed by upstream router"
+msgstr ""
+
+#: templates/dhcp_setting.php:179
+msgid "Validated before applying"
+msgstr ""
+
+#: templates/dhcp_setting.php:187
+msgid "Encrypted DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:187
+msgid "Bypass ISP resolvers with DNS over HTTPS"
+msgstr ""
+
+#: templates/dhcp_setting.php:194
+#, fuzzy
+msgid "Resolver protection"
+msgstr "Serverns placering"
+
+#: templates/dhcp_setting.php:199
+msgid "Use Encrypted DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:200
+msgid ""
+"OpenAP remains the DNS server for hotspot clients and encrypts upstream "
+"queries. Apply the selection with the button below."
+msgstr ""
+
+#: templates/dhcp_setting.php:209
+msgid "Provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:217
+msgid "Standard DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:220
+#, fuzzy
+msgid "Local endpoint"
+msgstr "Lokal hamn"
+
+#: templates/dhcp_setting.php:221
+msgid "Not active"
+msgstr ""
+
+#: templates/dhcp_setting.php:227
+msgid ""
+"Bridge clients use the DNS assigned by the upstream router. This resolver is "
+"configurable but is not enforced on bridged clients."
+msgstr ""
+
+#: templates/dhcp_setting.php:229
+msgid ""
+"dnsmasq forwards only to the local encrypted proxy; system and ISP DNS are "
+"ignored."
+msgstr ""
+
+#: templates/dhcp_setting.php:230
+msgid ""
+"When disabled, OpenAP uses the selected public resolver over standard DNS."
+msgstr ""
+
+#: templates/dhcp_setting.php:236
+msgid "Automatic rollback on validation failure"
+msgstr ""
+
+#: templates/dhcp_setting.php:237
+msgid "Apply DNS provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:262
+msgid "available"
+msgstr ""
+
+#: templates/exception.php:6 templates/exception.php:17
+#, fuzzy
+msgid "OpenAP Exception"
+msgstr "RaspAP Undantag"
+
+#: templates/exception.php:20
+msgid "An exception occurred"
+msgstr "Ett undantag inträffade"
+
+#: templates/hostapd.php:14 templates/repeater.php:121
+#: templates/wizard_uplink.php:36
+msgid "Hotspot"
+msgstr "Hotspot"
+
+#: templates/hostapd.php:22
+msgid "Start hotspot"
+msgstr "Starta hotspot"
+
+#: templates/hostapd.php:22
+msgid "Starting hotspot"
+msgstr "Starta hotspot"
+
+#: templates/hostapd.php:26
+msgid "Stop hotspot"
+msgstr "Stoppa hotspot"
+
+#: templates/hostapd.php:29
+msgid "Restart hotspot"
+msgstr "Starta om hotspot"
+
+#: templates/hostapd.php:29
+msgid "Restarting hotspot"
+msgstr "Starta om hotspot"
+
+#: templates/hostapd.php:73
+msgid "Information provided by hostapd"
+msgstr "Information som tillhandahålls av hostapd"
+
+#: templates/hostapd.php:87
+#, fuzzy
+msgid "Executing OpenAP service start"
+msgstr "Start av RaspAP-tjänsten"
+
+#: templates/hostapd/advanced.php:2
+msgid "Advanced settings"
+msgstr "Avancerade inställningar"
+
+#: templates/hostapd/advanced.php:9
+msgid "Bridged AP mode"
+msgstr "AP-läge med överbryggning"
+
+#: templates/hostapd/advanced.php:19
+msgid "Bridge interface configuration"
+msgstr "Konfiguration av brygggränssnitt"
+
+#: templates/hostapd/advanced.php:21
+msgid ""
+"Configure a static IP address for the <code>br0</code> interface to maintain "
+"connectivity during bridge mode activation."
+msgstr ""
+"Konfigurera en statisk IP-adress för gränssnittet <code>br0</code> för att "
+"upprätthålla anslutningen under aktivering av bryggläget."
+
+#: templates/hostapd/advanced.php:26
+msgid "Static IP Address"
+msgstr "Statisk IP-adress"
+
+#: templates/hostapd/advanced.php:32 templates/hostapd/advanced.php:58
+#: templates/hostapd/advanced.php:71
+msgid "Please enter a valid IPv4 address"
+msgstr "Ange en giltig IPv4-adress"
+
+#: templates/hostapd/advanced.php:35
+msgid "Example: 192.168.1.100"
+msgstr "Exempel: 192.168.1.100"
+
+#: templates/hostapd/advanced.php:39
+msgid "Netmask / CIDR"
+msgstr "Nätmask / CIDR"
+
+#: templates/hostapd/advanced.php:45
+msgid "Please enter a valid netmask"
+msgstr "Ange en giltig nätmask"
+
+#: templates/hostapd/advanced.php:48
+msgid "CIDR notation (e.g., 24 for 255.255.255.0)"
+msgstr "CIDR-notation (t.ex. 24 för 255.255.255.0)"
+
+#: templates/hostapd/advanced.php:61
+msgid "Your router's IP address"
+msgstr "IP-adressen till din router"
+
+#: templates/hostapd/advanced.php:65
+msgid "DNS Server"
+msgstr "DNS-server"
+
+#: templates/hostapd/advanced.php:74
+msgid "Usually same as gateway"
+msgstr "Vanligtvis samma som gateway"
+
+#: templates/hostapd/advanced.php:89
+msgid "WiFi client AP mode"
+msgstr "WiFi-klient AP-läge"
+
+#: templates/hostapd/advanced.php:98
+msgid "Hide SSID in broadcast"
+msgstr "Dölj SSID i broadcast"
+
+#: templates/hostapd/advanced.php:107
+msgid "Beacon interval"
+msgstr "Intervall för sändare"
+
+#: templates/hostapd/advanced.php:119
+msgid "Disable <code>disassoc_low_ack</code>"
+msgstr "Avaktivera <code>disassoc_low_ack</code>"
+
+#: templates/hostapd/advanced.php:122
+msgid "Do not disassociate stations based on excessive transmission failures."
+msgstr ""
+"Koppla inte bort stationer på grund av för många misslyckade överföringar."
+
+#: templates/hostapd/advanced.php:128
+msgid "Transmit power (dBm)"
+msgstr "Sändningseffekt (dBm)"
+
+#: templates/hostapd/advanced.php:129
+msgid ""
+"dBm is a unit of level used to indicate that a power ratio is expressed in "
+"decibels (dB) with reference to one milliwatt (mW). 30 dBm is equal to 1000 "
+"mW, while 0 dBm equals 1.25 mW."
+msgstr ""
+"dBm är en nivåenhet som används för att ange att ett effektförhållande "
+"uttrycks i decibel (dB) med hänvisning till en milliwatt (mW). 30 dBm är "
+"lika med 1000 mW, medan 0 dBm är lika med 1,25 mW."
+
+#: templates/hostapd/advanced.php:131
+msgid ""
+"Sets the <code>txpower</code> option for the AP interface and the configured "
+"country."
+msgstr ""
+"Ställer in alternativet <code>txpower</code> för AP-gränssnittet och det "
+"konfigurerade landet."
+
+#: templates/hostapd/advanced.php:137
+msgid "Maximum number of clients"
+msgstr "Maximalt antal klienter"
+
+#: templates/hostapd/advanced.php:139
+msgid ""
+"Configures the <code>max_num_sta</code> option of hostapd. The default and "
+"maximum is 2007. If empty or 0, the default applies."
+msgstr ""
+"Konfigurerar alternativet <code>max_num_sta</code> för hostapd. "
+"Standardvärdet och maxvärdet är 2007. Om alternativet är tomt eller 0 gäller "
+"standardvärdet."
+
+#: templates/hostapd/advanced.php:144
+msgid "Country Code"
+msgstr "Landskod"
+
+#: templates/hostapd/basic.php:2
+msgid "Basic settings"
+msgstr "Grundläggande inställningar"
+
+#: templates/hostapd/basic.php:19
+msgid "Please provide a valid SSID."
+msgstr "Ange ett giltigt SSID."
+
+#: templates/hostapd/basic.php:30
+#, fuzzy
+msgid "Wi-Fi band"
+msgstr "Wi-Fi-anslutning"
+
+#: templates/hostapd/basic.php:32
+msgid "2.4 GHz — longer range and widest compatibility"
+msgstr ""
+
+#: templates/hostapd/basic.php:33
+msgid "5 GHz — higher speed and less interference"
+msgstr ""
+
+#: templates/hostapd/basic.php:40
+#, fuzzy
+msgid "Wireless mode"
+msgstr "Trådlöst läge"
+
+#: templates/hostapd/basic.php:42
+msgid "The wireless mode follows the selected band automatically."
+msgstr ""
+
+#: templates/hostapd/basic.php:47 templates/wifi_hotspot.php:66
+#, fuzzy
+msgid "Channel width"
+msgstr "Kanal"
+
+#: templates/hostapd/basic.php:49
+msgid ""
+"OpenAP defaults to 20 MHz after a channel change. Wider compatible widths "
+"remain available."
+msgstr ""
+
+#: templates/hostapd/basic.php:54 templates/hostapd/basic.php:77
+#: templates/repeater.php:81 templates/repeater.php:130
+#: templates/wizard_repeater.php:53 templates/wizard_uplink.php:88
+msgid "Channel"
+msgstr "Kanal"
+
+#: templates/hostapd/basic.php:57
+msgid "Loading channels supported by this adapter..."
+msgstr ""
+
+#: templates/hostapd/basic.php:62
+msgid ""
+"Changing band, mode, width or channel restarts the hotspot. Connected Wi-Fi "
+"devices must reconnect afterward."
+msgstr ""
+
+#: templates/hostapd/basic.php:68
+msgid ""
+"Wireless standards which are not compatible with your adapter may be disabled"
+msgstr ""
+"Trådlösa standarder som inte är kompatibla med din adapter kan avaktiveras"
+
+#: templates/hostapd/basic.php:71
+#, php-format
+msgid "Based on the selected interface, 802.11%s is suggested."
+msgstr "Baserat på det valda gränssnittet föreslås 802.11%s."
+
+#: templates/hostapd/logging.php:4
+msgid "Enable this option to log <code>hostapd</code> activity."
+msgstr ""
+"Aktivera detta alternativ för att logga <code>hostapd-aktivitet</code>."
+
+#: templates/hostapd/logging.php:9
+msgid "Logfile output"
+msgstr "Utmatning av loggfil"
+
+#: templates/hostapd/logging.php:10
+msgid "Clear log"
+msgstr "Rensa logg"
+
+#: templates/hostapd/security.php:2
+msgid "Security settings"
+msgstr "Säkerhetsinställningar"
+
+#: templates/hostapd/security.php:6
+msgid "Security type"
+msgstr "Typ av säkerhet"
+
+#: templates/hostapd/security.php:10
+msgid "Encryption Type"
+msgstr "Krypteringstyp"
+
+#: templates/hostapd/security.php:14
+msgid "802.11w"
+msgstr "802.11w"
+
+#: templates/hostapd/security.php:15
+msgid ""
+"802.11w extends strong cryptographic protection to a select set of robust "
+"management frames, including Deauthentication, Disassociation and certain "
+"categories of Action Management frames. Collectively, this is known as "
+"Management Frame Protection (MFP)."
+msgstr ""
+"802.11w utökar starkt kryptografiskt skydd till en utvald uppsättning "
+"robusta hanteringsramar, inklusive Deauthentication, Disassociation och "
+"vissa kategorier av Action Management-ramar. Sammantaget kallas detta för "
+"Management Frame Protection (MFP)."
+
+#: templates/hostapd/security.php:19
+msgid "Pre-shared key (PSK)"
+msgstr "Förhandsdelad nyckel (PSK)"
+
+#: templates/hostapd/security.php:24
+msgid "Please provide a valid PSK."
+msgstr "Ange en giltig PSK."
+
+#: templates/hostapd/security.php:32
+#, php-format
+msgid "Scan this QR code directly or %s %sprint a sign%s for your users."
+msgstr ""
+"Skanna denna QR-kod direkt eller %s %sskriv ut en skylt%s för dina användare."
+
+#: templates/logging.php:32
+msgid "Service diagnostics and system events"
+msgstr ""
+
+#: templates/logging.php:33
+msgid "Read only"
+msgstr ""
+
+#: templates/logging.php:36
+#, fuzzy
+msgid "Service logs"
+msgstr "Apparater"
+
+#: templates/logging.php:44
+msgid "Latest 240 journal entries"
+msgstr ""
+
+#: templates/logging.php:44
+msgid "Copy log"
+msgstr ""
+
+#: templates/openap_service_status.php:36
+#, fuzzy
+msgid "Service status"
+msgstr "Serverinställningar"
+
+#: templates/openap_service_status.php:37
+#, fuzzy
+msgid "Core OpenAP services"
+msgstr "Stoppa RestAPI-tjänsten"
+
+#: templates/openap_service_status.php:51
+msgid "Runtime monitored"
+msgstr ""
+
+#: templates/openap_service_status.php:52
+#, fuzzy
+msgid "services"
+msgstr "Apparater"
+
+#: templates/repeater.php:16
+#, fuzzy
+msgid "Refresh status"
+msgstr "RestAPI-status"
+
+#: templates/repeater.php:19
+#, fuzzy
+msgid "Restart uplink"
+msgstr "Starta om lighttpd"
+
+#: templates/repeater.php:21
+msgid "Opening"
+msgstr ""
+
+#: templates/repeater.php:26
+#, fuzzy
+msgid "Restart AP"
+msgstr "RestAPI"
+
+#: templates/repeater.php:29
+msgid "Restart DHCP"
+msgstr ""
+
+#: templates/repeater.php:36
+#, fuzzy
+msgid "Role configuration"
+msgstr "Konfigurationer"
+
+#: templates/repeater.php:40
+msgid "Profile"
+msgstr ""
+
+#: templates/repeater.php:41
+msgid "AP role"
+msgstr ""
+
+#: templates/repeater.php:42
+msgid "Uplink role"
+msgstr ""
+
+#: templates/repeater.php:43
+msgid "Role validation"
+msgstr ""
+
+#: templates/repeater.php:51
+msgid "Ethernet"
+msgstr "Ethernet"
+
+#: templates/repeater.php:54
+msgid "Carrier"
+msgstr ""
+
+#: templates/repeater.php:67
+msgid "No ethernet interfaces found."
+msgstr ""
+
+#: templates/repeater.php:78 templates/wizard_repeater.php:50
+msgid "Type"
+msgstr ""
+
+#: templates/repeater.php:79 templates/wizard_repeater.php:51
+msgid "Phy"
+msgstr ""
+
+#: templates/repeater.php:83 templates/wizard_repeater.php:55
+msgid "Managed"
+msgstr ""
+
+#: templates/repeater.php:95 templates/repeater.php:96
+#: templates/wizard_repeater.php:67 templates/wizard_repeater.php:68
+msgid "yes"
+msgstr ""
+
+#: templates/repeater.php:95 templates/repeater.php:96
+#: templates/wizard_repeater.php:67 templates/wizard_repeater.php:68
+msgid "no"
+msgstr ""
+
+#: templates/repeater.php:109 templates/repeater.php:125
+#: templates/system.php:132
+#, fuzzy
+msgid "Service"
+msgstr "Enhet"
+
+#: templates/repeater.php:113 templates/repeater.php:129
+msgid "Frequency"
+msgstr ""
+
+#: templates/repeater.php:115
+msgid "Link speed"
+msgstr ""
+
+#: templates/repeater.php:128 templates/wizard_ap_ethernet.php:35
+#: templates/wizard_ap_ethernet.php:86
+#, fuzzy
+msgid "Mode"
+msgstr "Mörkt läge"
+
+#: templates/repeater.php:137
+#, fuzzy
+msgid "Client network"
+msgstr "Kundlista"
+
+#: templates/repeater.php:140
+#, fuzzy
+msgid "Subnet"
+msgstr "Nätmask"
+
+#: templates/repeater.php:142
+#, fuzzy
+msgid "DHCP range"
+msgstr "DHCP-server"
+
+#: templates/repeater.php:143
+#, fuzzy
+msgid "dnsmasq"
+msgstr "Stoppa dnsmasq"
+
+#: templates/repeater.php:144
+msgid "nftables"
+msgstr ""
+
+#: templates/repeater.php:145
+msgid "IPv4 forwarding"
+msgstr ""
+
+#: templates/repeater.php:146
+msgid "NAT"
+msgstr ""
+
+#: templates/repeater.php:152
+msgid ""
+"Information provided by hostapd, wpa_supplicant, dnsmasq, nftables and "
+"systemd."
+msgstr ""
+
+#: templates/system.php:16
+#, fuzzy
+msgid "WiFi access point"
+msgstr "WiFi-klient"
+
+#: templates/system.php:17
+msgid "DHCP + DNS"
+msgstr ""
+
+#: templates/system.php:19
+#, fuzzy
+msgid "NAT / Firewall"
+msgstr "Brandvägg"
+
+#: templates/system.php:20
+#, fuzzy
+msgid "Web server"
+msgstr "Port för webbserver"
+
+#: templates/system.php:21
+#, fuzzy
+msgid "Network backend"
+msgstr "Nätverksenheter"
+
+#: templates/system.php:33
+msgid "Device information and diagnostics"
+msgstr ""
+
+#: templates/system.php:37 templates/system.php:280
+msgid "Reboot"
+msgstr "Omstart"
+
+#: templates/system.php:40
+msgid "Refresh"
+msgstr "Uppdatera"
+
+#: templates/system.php:51
+#, fuzzy
+msgid "OpenAP diagnostics"
+msgstr "Diagnostik"
+
+#: templates/system.php:57
+#, fuzzy
+msgid "Operating mode"
+msgstr "Uppdatering av källor"
+
+#: templates/system.php:65
+msgid "CPU Load"
+msgstr "CPU-belastning"
+
+#: templates/system.php:70
+#, fuzzy
+msgid "Memory"
+msgstr "Använt minne"
+
+#: templates/system.php:90
+msgid "Operating System"
+msgstr ""
+
+#: templates/system.php:94
+msgid "OS"
+msgstr "OS"
+
+#: templates/system.php:95
+msgid "Kernel"
+msgstr "Kärnan"
+
+#: templates/system.php:96
+msgid "Architecture"
+msgstr ""
+
+#: templates/system.php:97
+msgid "Container"
+msgstr ""
+
+#: templates/system.php:98
+msgid "CPU cores"
+msgstr ""
+
+#: templates/system.php:100
+#, fuzzy
+msgid "System time"
+msgstr "Systemtid"
+
+#: templates/system.php:109
+#, fuzzy
+msgid "Network Profile"
+msgstr "Nätverksenheter"
+
+#: templates/system.php:126
+#, fuzzy
+msgid "Services"
+msgstr "Apparater"
+
+#: templates/system.php:134
+#, fuzzy
+msgid "Enabled"
+msgstr "Aktivera peer"
+
+#: templates/system.php:135
+#, fuzzy
+msgid "Active since"
+msgstr "Aktiva DHCP-leasingavtal"
+
+#: templates/system.php:157
+msgid "Project Software"
+msgstr ""
+
+#: templates/system.php:178
+#, fuzzy
+msgid "Configuration Files"
+msgstr "Konfigurationsfil"
+
+#: templates/system.php:187
+msgid "Readable"
+msgstr ""
+
+#: templates/system.php:187
+msgid "Missing"
+msgstr ""
+
+#: templates/system.php:200
+#, fuzzy
+msgid "Read-only information provided by OpenAP system diagnostics."
+msgstr "Information som tillhandahålls av vnstat"
+
+#: templates/system.php:236
+#, fuzzy
+msgid "Network profile"
+msgstr "Nätverksenheter"
+
+#: templates/system.php:237
+msgid "Current OpenAP mode"
+msgstr ""
+
+#: templates/system.php:242
+#, fuzzy
+msgid "Active mode"
+msgstr "Aktivera"
+
+#: templates/system.php:267
+#, fuzzy
+msgid "Reboot system"
+msgstr "Omstart"
+
+#: templates/system.php:272
+msgid ""
+"OpenAP and its network services will be temporarily unavailable while the "
+"system restarts."
+msgstr ""
+
+#: templates/wifi_hotspot.php:25 templates/wifi_hotspot.php:39
+#, fuzzy
+msgid "Wireless access point status"
+msgstr "Gränssnitt för trådlös klient"
+
+#: templates/wifi_hotspot.php:47
+#, fuzzy
+msgid "Wireless access point"
+msgstr "Gränssnitt för trådlös klient"
+
+#: templates/wizard_ap_ethernet.php:32
+#, fuzzy
+msgid "AP Ethernet active"
+msgstr "Ethernet"
+
+#: templates/wizard_ap_ethernet.php:33
+#, fuzzy
+msgid "Ethernet uplink configured on"
+msgstr "ej konfigurerad"
+
+#: templates/wizard_ap_ethernet.php:35 templates/wizard_ap_ethernet.php:51
+msgid "Routed / NAT"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:36 templates/wizard_ap_ethernet.php:77
+#, fuzzy
+msgid "Management gateway"
+msgstr "Standard-gateway"
+
+#: templates/wizard_ap_ethernet.php:38
+msgid "Waiting for hotspot state before refreshing dashboard..."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:46
+#, fuzzy
+msgid "Network mode"
+msgstr "Nätverksenheter"
+
+#: templates/wizard_ap_ethernet.php:51
+msgid "OpenAP DHCP and isolated subnet"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:56
+msgid "Same LAN and DHCP as Ethernet"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:59
+msgid ""
+"WiFi clients will receive addresses, gateway and DNS directly from the "
+"upstream router. The management gateway below applies only to the OpenAP "
+"host."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:78
+msgid "OpenAP host default route"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:85
+#, fuzzy
+msgid "Detected"
+msgstr "Frånkopplad"
+
+#: templates/wizard_ap_ethernet.php:91
+msgid "Saving..."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:102
+msgid "AP traffic routed via ethernet uplink."
+msgstr ""
+
+#: templates/wizard_repeater.php:6
+#, fuzzy
+msgid "Repeater setup"
+msgstr "Repeater"
+
+#: templates/wizard_repeater.php:14
+msgid "Two WiFi interfaces detected. Repeater setup is available."
+msgstr ""
+
+#: templates/wizard_repeater.php:16
+msgid "Repeater setup needs two WiFi interfaces with AP and managed support."
+msgstr ""
+
+#: templates/wizard_repeater.php:23
+msgid "Selected AP"
+msgstr ""
+
+#: templates/wizard_repeater.php:32
+msgid "Selected uplink"
+msgstr ""
+
+#: templates/wizard_repeater.php:43
+#, fuzzy
+msgid "WiFi interfaces"
+msgstr "gränssnitt"
+
+#: templates/wizard_repeater.php:72
+#, fuzzy
+msgid "No WiFi interfaces found."
+msgstr "Inga Wifi-stationer hittades"
+
+#: templates/wizard_repeater.php:83
+msgid "Switching"
+msgstr ""
+
+#: templates/wizard_repeater.php:85
+#, fuzzy
+msgid "Configure repeater"
+msgstr "Konfigurera uppdatering"
+
+#: templates/wizard_repeater.php:90
+msgid "Repeater traffic will use the selected WiFi uplink."
+msgstr ""
+
+#: templates/wizard_uplink.php:8
+msgid "Uplink setup"
+msgstr ""
+
+#: templates/wizard_uplink.php:10 templates/wizard_uplink.php:66
+msgid "Scan"
+msgstr ""
+
+#: templates/wizard_uplink.php:27
+#, fuzzy
+msgid "Repeater connected successfully"
+msgstr "Fil \"%s\" borttagen framgångsrikt"
+
+#: templates/wizard_uplink.php:28
+msgid "Hotspot traffic now uses the selected WiFi uplink."
+msgstr ""
+
+#: templates/wizard_uplink.php:33
+msgid "Uplink network"
+msgstr ""
+
+#: templates/wizard_uplink.php:34
+#, fuzzy
+msgid "Uplink address"
+msgstr "Slutpunktsadress"
+
+#: templates/wizard_uplink.php:48
+msgid "Done"
+msgstr ""
+
+#: templates/wizard_uplink.php:55
+msgid "Select a WiFi network below or click Scan to search."
+msgstr ""
+
+#: templates/wizard_uplink.php:57
+msgid "No managed-capable WiFi uplink interface is ready."
+msgstr ""
+
+#: templates/wizard_uplink.php:64
+msgid "Available networks"
+msgstr ""
+
+#: templates/wizard_uplink.php:64
+msgid "Choose an uplink or scan again"
+msgstr ""
+
+#: templates/wizard_uplink.php:79
+#, fuzzy
+msgid "Saved"
+msgstr "Spara"
+
+#: templates/wizard_uplink.php:82
+#, fuzzy
+msgid "Current uplink"
+msgstr "Aktuella inställningar"
+
+#: templates/wizard_uplink.php:96
+msgid "WPA3-only uplinks are not currently supported"
+msgstr ""
+
+#: templates/wizard_uplink.php:97
+msgid "WPA3 unsupported"
+msgstr ""
+
+#: templates/wizard_uplink.php:105 templates/wizard_uplink.php:166
+#, fuzzy
+msgid "Connecting"
+msgstr "Anslut"
+
+#: templates/wizard_uplink.php:108
+#, fuzzy
+msgid "Reconnect saved"
+msgstr "Frånkopplad"
+
+#: templates/wizard_uplink.php:108
+#, fuzzy
+msgid "Connect saved"
+msgstr "Ansluten"
+
+#: templates/wizard_uplink.php:113
+#, fuzzy
+msgid "Edit saved password"
+msgstr "Uppdatera administratörslösenord"
+
+#: templates/wizard_uplink.php:114
+#, fuzzy
+msgid "Edit password"
+msgstr "Gammalt lösenord"
+
+#: templates/wizard_uplink.php:118
+#, fuzzy
+msgid "Select"
+msgstr "Välj ett tema"
+
+#: templates/wizard_uplink.php:126
+msgid "Forget saved network"
+msgstr ""
+
+#: templates/wizard_uplink.php:126
+msgid "Forget"
+msgstr ""
+
+#: templates/wizard_uplink.php:133
+msgid "No networks found. Click Scan to search."
+msgstr ""
+
+#: templates/wizard_uplink.php:136
+#, fuzzy
+msgid "Enter network manually"
+msgstr "Skapa manuellt"
+
+#: templates/wizard_uplink.php:141
+msgid "Uplink credentials"
+msgstr ""
+
+#: templates/wizard_uplink.php:141
+msgid "Connect the selected network"
+msgstr ""
+
+#: templates/wizard_uplink.php:155
+msgid "Select a network or type SSID"
+msgstr ""
+
+#: templates/wizard_uplink.php:168
+msgid "Connect"
+msgstr "Anslut"
+
+#: templates/wizard_uplink.php:177
+msgid "Uplink credentials are stored in the selected wpa_supplicant profile."
+msgstr ""

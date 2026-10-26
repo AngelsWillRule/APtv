@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenAP SSH management access
+Wants=network-online.target
+After=network-online.target nftables.service ufw.service openap-firewall.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openap-allow-ssh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

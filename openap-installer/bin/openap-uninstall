@@ -1,0 +1,603 @@
+#!/usr/bin/env bash
+#
+# OpenAP-owned file and service cleanup.
+#
+# Default mode is dry-run. Use --apply to perform the removal.
+
+set -euo pipefail
+
+apply=0
+assume_yes=0
+allow_missing_release=0
+webroot="/var/www/html"
+profile="/etc/openap/repeater.ini"
+release_file="/etc/openap/release"
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+webroot_excludes="$repo_dir/openap-installer/config/webroot-excludes.txt"
+progress_step=0
+progress_total=7
+progress_width=28
+removed_system_paths=0
+removed_web_files=0
+removed_web_dirs=0
+removed_config_entries=0
+removed_config_dir=0
+service_state_file="/etc/openap/preinstall-state/install-state.env"
+dnscrypt_state_backup="/etc/openap/preinstall-state/dnscrypt-proxy.toml"
+managed_services=(
+  hostapd.service
+  dnsmasq.service
+  dnscrypt-proxy.service
+  dnscrypt-proxy.socket
+  dnscrypt-proxy-resolvconf.service
+  lighttpd.service
+  lighttpd-maint.timer
+  phpsessionclean.timer
+)
+
+show_progress() {
+  local label="$1"
+  local filled percent bar
+
+  progress_step=$((progress_step + 1))
+  filled=$((progress_step * progress_width / progress_total))
+  percent=$((progress_step * 100 / progress_total))
+  printf -v bar '%*s' "$filled" ''
+  bar=${bar// /#}
+  printf '\r[%-*s] %3d%% (%d/%d) %-42s' \
+    "$progress_width" "$bar" "$percent" "$progress_step" "$progress_total" "$label"
+  if [ "$progress_step" -eq "$progress_total" ]; then
+    printf '\n'
+  fi
+}
+
+usage() {
+  cat <<'EOF'
+Usage: openap-uninstall [--apply] [--yes] [--allow-missing-release] [--webroot /var/www/html]
+
+Removes only OpenAP-owned web files, runtime configuration, helpers and systemd
+units. The default is a dry run. Installed packages, services, Wi-Fi firmware
+and drivers are never removed. No uninstall backup is created.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply) apply=1 ;;
+    --yes|-y) assume_yes=1 ;;
+    --allow-missing-release) allow_missing_release=1 ;;
+    --webroot)
+      webroot="${2:-}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+case "$webroot" in
+  /*) ;;
+  *) echo "ERROR: --webroot must be an absolute path." >&2; exit 1 ;;
+esac
+case "$webroot" in
+  /|/etc|/usr|/var|/home|/root)
+    echo "ERROR: unsafe webroot refused: $webroot" >&2
+    exit 1
+    ;;
+esac
+if [ -L "$webroot" ]; then
+  echo "ERROR: refusing a symbolic-link webroot: $webroot" >&2
+  exit 1
+fi
+if [ -L /etc/openap ]; then
+  echo "ERROR: refusing a symbolic-link OpenAP configuration directory: /etc/openap" >&2
+  exit 1
+fi
+
+if [ ! -f "$release_file" ] && [ "$allow_missing_release" -ne 1 ]; then
+  echo "ERROR: OpenAP installation marker not found: $release_file" >&2
+  exit 1
+fi
+if [ ! -f "$release_file" ] && [ "$allow_missing_release" -eq 1 ]; then
+  echo "WARNING: OpenAP marker is absent; removing only shared files left by standalone IPTV." >&2
+fi
+if [ ! -r "$webroot_excludes" ]; then
+  echo "ERROR: OpenAP webroot exclusion list not found: $webroot_excludes" >&2
+  exit 1
+fi
+if [ -d "$webroot" ] \
+  && { [ ! -f "$webroot/index.php" ] \
+    || ! grep -q 'OpenAP WiFi access point and repeater management' "$webroot/index.php"; }; then
+  echo "ERROR: refusing an unrecognized webroot without the OpenAP entrypoint: $webroot" >&2
+  echo "No files or services were changed." >&2
+  exit 1
+fi
+
+profile_value() {
+  local key="$1"
+  [ -r "$profile" ] || return 0
+  awk -F ' *= *' -v wanted="$key" '$1 == wanted {print $2; exit}' "$profile"
+}
+
+valid_iface() {
+  case "$1" in
+    ""|*[!A-Za-z0-9_.:-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+state_value() {
+  local key="$1"
+  [ -r "$service_state_file" ] || return 0
+  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$service_state_file"
+}
+
+nm_restore_original_ethernet() {
+  local saved_connection backup candidate
+  command -v nmcli >/dev/null 2>&1 || return 0
+  systemctl is-active --quiet NetworkManager.service || return 0
+
+  saved_connection="$(profile_value ethernet_connection)"
+  if [ -z "$saved_connection" ] && [ -d /etc/openap/backups ]; then
+    # Older bridge profiles did not persist ethernet_connection in
+    # repeater.ini, but their backup contains the pre-bridge NM profile.
+    while IFS= read -r backup; do
+      candidate="$(awk -F ': *' '/^connection\.id:/ {print $2; exit}' "$backup" 2>/dev/null || true)"
+      if [ -n "$candidate" ]; then
+        saved_connection="$candidate"
+        break
+      fi
+    done < <(find /etc/openap/backups -type f -name original-ethernet-connection.txt -print 2>/dev/null | sort -r)
+  fi
+
+  [ -n "$saved_connection" ] || return 0
+  nmcli -t -f NAME connection show | grep -Fxq "$saved_connection" || return 0
+  case "$saved_connection" in
+    openap-bridge|openap-bridge-*) return 0 ;;
+  esac
+  nmcli connection modify "$saved_connection" connection.autoconnect yes >/dev/null 2>&1 || true
+  nmcli connection up "$saved_connection" >/dev/null 2>&1 || true
+}
+
+nm_remove_owned_bridge_profiles() {
+  local connection_name
+  command -v nmcli >/dev/null 2>&1 || return 0
+  systemctl is-active --quiet NetworkManager.service || return 0
+  while IFS= read -r connection_name; do
+    case "$connection_name" in
+      openap-bridge|openap-bridge-*)
+        nmcli connection down "$connection_name" >/dev/null 2>&1 || true
+        nmcli connection delete "$connection_name" >/dev/null 2>&1 || true
+        ;;
+    esac
+  done < <(nmcli -t -f NAME connection show 2>/dev/null || true)
+  nm_restore_original_ethernet
+}
+
+restore_active_ethernet_bridge() {
+  local current backend helper
+
+  current="$(profile_value current)"
+  backend="$(profile_value address_backend)"
+
+  # A bridge switch already has a transactional rollback path in its
+  # backend helper.  Use it before removing OpenAP-owned network profiles;
+  # otherwise networkd can be left with only lo after AP removal.
+  if [ "$current" != ap_ethernet_bridge ]; then
+    if [ -e /etc/openap/networkd-mode/ethernet-interface ]; then
+      backend=systemd-networkd
+    elif [ -e /etc/openap/ifupdown-ethernet-bridge.state ]; then
+      backend=ifupdown
+    else
+      return 0
+    fi
+  fi
+
+  case "$backend" in
+    systemd-networkd)
+      helper=/usr/local/sbin/openap-apply-ap-ethernet-bridge-networkd
+      [ -x "$helper" ] || {
+        echo "ERROR: Ethernet Bridge is active but its networkd rollback helper is missing." >&2
+        return 1
+      }
+      "$helper" --disable "$ethernet_iface"
+      ;;
+    ifupdown)
+      helper=/usr/local/sbin/openap-apply-ap-ethernet-bridge-ifupdown
+      [ -x "$helper" ] || {
+        echo "ERROR: Ethernet Bridge is active but its ifupdown rollback helper is missing." >&2
+        return 1
+      }
+      "$helper" --disable "$ethernet_iface"
+      ;;
+    *)
+      echo "ERROR: unsupported Ethernet Bridge backend: ${backend:-unknown}" >&2
+      return 1
+      ;;
+  esac
+}
+
+restore_managed_service_state() {
+  local service key package_preexisting enabled_before active_before
+  if [ ! -r "$service_state_file" ]; then
+    echo "WARNING: pre-install service state is unavailable; disabling hotspot and DNS services conservatively." >&2
+    systemctl disable --now hostapd.service dnsmasq.service \
+      dnscrypt-proxy.service dnscrypt-proxy.socket \
+      dnscrypt-proxy-resolvconf.service >/dev/null 2>&1 || true
+    systemctl try-restart lighttpd.service >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if [ -f "$dnscrypt_state_backup" ]; then
+    install -o root -g root -m 0644 "$dnscrypt_state_backup" /etc/dnscrypt-proxy/dnscrypt-proxy.toml
+  fi
+
+  for service in "${managed_services[@]}"; do
+    key="${service//[.-]/_}"
+    package_preexisting="$(state_value "service_${key}_package_preexisting")"
+    enabled_before="$(state_value "service_${key}_enabled_before")"
+    active_before="$(state_value "service_${key}_active_before")"
+
+    if [ "$package_preexisting" != true ]; then
+      systemctl disable --now "$service" >/dev/null 2>&1 || true
+      continue
+    fi
+
+    case "$enabled_before" in
+      enabled|enabled-runtime|linked|linked-runtime|alias)
+        systemctl enable "$service" >/dev/null 2>&1 || true
+        ;;
+      masked|masked-runtime)
+        systemctl mask "$service" >/dev/null 2>&1 || true
+        ;;
+      *)
+        systemctl disable "$service" >/dev/null 2>&1 || true
+        ;;
+    esac
+    if [ "$active_before" = active ]; then
+      systemctl restart "$service" >/dev/null 2>&1 || true
+    else
+      systemctl stop "$service" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
+ap_iface="$(profile_value ap)"
+uplink_iface="$(profile_value uplink)"
+# Ethernet Bridge stores the logical bridge in `ethernet` and the physical
+# uplink in `ethernet_physical`.  The latter is the one whose legacy networkd
+# file must be removed during uninstall.
+ethernet_iface="$(profile_value ethernet_physical)"
+[ -n "$ethernet_iface" ] || ethernet_iface="$(profile_value ethernet)"
+gateway="$(profile_value gateway)"
+subnet="$(profile_value subnet)"
+bridge_iface="$(profile_value bridge)"
+
+for iface in "$ap_iface" "$uplink_iface" "$ethernet_iface" "$bridge_iface"; do
+  [ -z "$iface" ] || valid_iface "$iface" || {
+    echo "ERROR: unsafe interface name in $profile: $iface" >&2
+    exit 1
+  }
+done
+
+dynamic_paths=()
+[ -z "$ap_iface" ] || dynamic_paths+=(
+  "/etc/systemd/network/20-${ap_iface}-ap.network"
+  "/etc/systemd/network/30-${ap_iface}-sta.network"
+  "/etc/wpa_supplicant/wpa_supplicant-${ap_iface}.conf"
+)
+[ -z "$uplink_iface" ] || dynamic_paths+=(
+  "/etc/systemd/network/20-${uplink_iface}-ap.network"
+  "/etc/systemd/network/30-${uplink_iface}-sta.network"
+  "/etc/wpa_supplicant/wpa_supplicant-${uplink_iface}.conf"
+)
+[ -z "$ethernet_iface" ] || dynamic_paths+=(
+  "/etc/systemd/network/10-${ethernet_iface}.network"
+)
+
+owned_paths=(
+  /var/cache/openap/detect/report.json
+  /var/cache/openap/detect/report.lock
+  /var/cache/openap/detect/refresh.lock
+  /etc/dnsmasq.d/openap-repeater.conf
+  /etc/hostapd/hostapd.conf
+  /etc/hostapd/openap-ap-24ghz.conf
+  /etc/hostapd/openap-ap-5ghz.conf
+  /etc/lighttpd/conf-available/50-openap-router.conf
+  /etc/lighttpd/conf-enabled/50-openap-router.conf
+  /etc/sudoers.d/090_openap_universal
+  /etc/sudoers.d/091_openap_txpower
+  /etc/sysctl.d/90-openap-forward.conf
+  /etc/systemd/network/20-openap-ap.network
+  # Legacy Ethernet-bridge AP profiles.  They have higher precedence than
+  # the routed AP profile and must not survive an uninstall/reinstall.
+  /etc/systemd/network/05-openap-bridge.netdev
+  /etc/systemd/network/05-openap-bridge.network
+  /etc/systemd/network/05-openap-bridge-port.network
+  /etc/systemd/network/06-openap-bridge-ap.network
+  /etc/systemd/network/06-openap-bridge-hotspot.network
+  /etc/systemd/network/15-openap-hotspot.netdev
+  /etc/systemd/network/20-openap-hotspot.network
+  # Legacy Raspberry/OpenAP profiles created by the official installer.  They
+  # are owned paths, not generic NetworkManager or user ifupdown profiles.
+  /etc/systemd/network/10-eth0.network
+  /etc/systemd/network/20-wlan0-ap.network
+  /etc/systemd/network/20-wlan1-ap.network
+  /etc/systemd/network/30-wlan2-sta.network
+  /etc/systemd/system/dnsmasq.service.d/20-openap-ap-address.conf
+  /etc/systemd/system/dnsmasq.service.d/20-openap-wait-ap-address.conf
+  /etc/systemd/system/dnsmasq.service.d/25-openap-dnsmasq-mode.conf
+  /etc/systemd/system/openap-firewall.service.d/25-openap-firewall-mode.conf
+  /etc/systemd/system/hostapd.service.d/20-openap-ap-address.conf
+  /etc/systemd/system/hostapd.service.d/20-openap-wait-ap-address.conf
+  /etc/systemd/system/hostapd.service.d/30-openap-hostapd-config.conf
+  /etc/systemd/system/hostapd.service.d/40-openap-dual-band.conf
+  /etc/systemd/system/hostapd.service.d/45-openap-ap-bridge.conf
+  /etc/systemd/system/lighttpd.service.d/20-openap-privileges.conf
+  /etc/systemd/system/systemd-networkd-wait-online.service.d/99-openap-networkd-wait-online.conf
+  /etc/systemd/system/NetworkManager-wait-online.service.d/99-openap-networkmanager-wait-online.conf
+  /etc/systemd/system/openap-ap-address.service
+  /etc/systemd/system/openap-bridge-neighbors.service
+  /etc/systemd/system/openap-bridge-neighbors.timer
+  /etc/systemd/system/openap-firewall.service
+  /etc/systemd/system/openap-ssh-access.service
+  /etc/systemd/system/openap-regdomain.service
+  /etc/systemd/system/openap-uplink.service
+  /etc/systemd/system/openap-uplink-watchdog.service
+  /etc/systemd/system/openap-uplink-watchdog.timer
+  /usr/local/sbin/openap-apply-ap-ethernet
+  /usr/local/sbin/openap-networkd-wait-online
+  /usr/local/sbin/openap-migrate-ifupdown-networkd
+  /usr/local/sbin/openap-apply-ap-ethernet-bridge
+  /usr/local/sbin/openap-apply-ap-ethernet-bridge-ifupdown
+  /usr/local/sbin/openap-apply-ap-ethernet-bridge-networkd
+  /usr/local/sbin/openap-attach-ap-bridge
+  /usr/local/sbin/openap-apply-dhcp-settings
+  /usr/local/sbin/openap-apply-dual-hostapd
+  /usr/local/sbin/openap-apply-encrypted-dns
+  /usr/local/sbin/openap-reset-ap-radio
+  /usr/local/sbin/openap-apply-repeater-wifi
+  /usr/local/sbin/openap-apply-uplink-wifi
+  /usr/local/sbin/openap-detect
+  /usr/local/sbin/openap-forget-uplink-wifi
+  /usr/local/sbin/openap-generate-dual-hostapd
+  /usr/local/sbin/openap-prepare-ap-interface
+  /usr/local/sbin/openap-refresh-bridge-neighbors
+  /usr/local/sbin/openap-resolve-interfaces
+  /usr/local/sbin/openap-run-uplink
+  /usr/local/sbin/openap-scan-wifi
+  /usr/local/sbin/openap-set-txpower
+  /usr/local/sbin/openap-switch-interface-roles
+  /usr/local/sbin/openap-allow-ssh
+  /usr/local/sbin/openap-system-reboot
+  /usr/local/sbin/openap-dnsmasq-required
+  /usr/local/sbin/openap-routed-service-required
+  /usr/local/sbin/openap-udhcpc-hook
+  /usr/local/sbin/openap-uplink-watchdog
+  /usr/local/sbin/openap-wait-ap-address
+)
+
+# The component manager invokes this uninstaller while it is removing the AP
+# component.  Keep the manager executable available so the enclosing operation
+# can restore the IPTV component and remain usable for the next operation.
+if [ "${OPENAP_KEEP_COMPONENT_MANAGER_RUNTIME:-0}" != 1 ]; then
+  owned_paths+=(/usr/local/sbin/openap-component-manager)
+fi
+
+echo "OpenAP uninstall plan"
+echo "  AP interface:       ${ap_iface:-unknown}"
+echo "  Wi-Fi uplink:       ${uplink_iface:-not configured}"
+echo "  Ethernet interface: ${ethernet_iface:-unknown}"
+echo "  Webroot:            $webroot"
+echo
+echo "The operation will:"
+echo "  - stop and disable only OpenAP-owned services and timers;"
+echo "  - remove only known OpenAP helpers, units and network profiles;"
+echo "  - remove OpenAP web files while preserving unrelated webroot content;"
+echo "  - remove /etc/openap and OpenAP-specific dnsmasq/hostapd configuration;"
+echo "  - restore the pre-install state of Lighttpd, dnsmasq, dnscrypt-proxy and hostapd;"
+echo "  - keep installed OS packages, firmware and drivers."
+echo "  - create no uninstall backup."
+
+if [ "$apply" -eq 0 ]; then
+  echo
+  echo "DRY-RUN: no changes were made. Re-run with --apply to uninstall."
+  exit 0
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: --apply must run as root." >&2
+  exit 1
+fi
+
+if [ "$assume_yes" -eq 0 ]; then
+  [ -t 0 ] || {
+    echo "ERROR: interactive confirmation is required; use --yes only for an intentional unattended uninstall." >&2
+    exit 1
+  }
+  answer=""
+  printf "Type UNINSTALL to continue: "
+  IFS= read -r answer
+  [ "$answer" = "UNINSTALL" ] || {
+    echo "Uninstall cancelled."
+    exit 0
+  }
+fi
+
+# The component notification consumes this stream as a terminal log.  Trace
+# the confirmed removal path so it contains the real commands being run.
+PS4='+ '
+set -x
+
+restore_active_ethernet_bridge
+
+systemctl disable --now \
+  openap-ap-address.service \
+  openap-bridge-neighbors.timer \
+  openap-firewall.service \
+  openap-ssh-access.service \
+  openap-regdomain.service \
+  openap-uplink.service \
+  openap-uplink-watchdog.timer 2>/dev/null || true
+systemctl stop "${managed_services[@]}" 2>/dev/null || true
+# openap-uplink.service claims its radio from NetworkManager before launching
+# the dedicated supplicant.  Return that interface to NetworkManager when
+# OpenAP is removed so the retained host networking stack can use it again.
+if valid_iface "$uplink_iface" \
+  && command -v nmcli >/dev/null 2>&1 \
+  && systemctl is-active --quiet NetworkManager.service; then
+  nmcli device set "$uplink_iface" managed yes >/dev/null 2>&1 || true
+fi
+show_progress "OpenAP services stopped"
+systemctl reset-failed lighttpd.service hostapd.service dnsmasq.service openap-firewall.service openap-ssh-access.service 2>/dev/null || true
+
+nft delete table ip openap_nat 2>/dev/null || true
+
+if [ -n "$gateway" ] && [ -n "$subnet" ]; then
+  prefix="${subnet#*/}"
+  case "$gateway/$prefix" in
+    *[!0-9./]*) ;;
+    *)
+      for gateway_iface in "$bridge_iface" "$ap_iface"; do
+        valid_iface "$gateway_iface" || continue
+        ip address del "$gateway/$prefix" dev "$gateway_iface" 2>/dev/null || true
+      done
+      ;;
+  esac
+fi
+nm_remove_owned_bridge_profiles
+if [ "$bridge_iface" = openap0 ] && [ -d /sys/class/net/openap0/bridge ]; then
+  ip link set dev openap0 down 2>/dev/null || true
+  ip link delete dev openap0 type bridge
+fi
+[ ! -d /run/openap ] || rm -rf -- /run/openap
+show_progress "Firewall and AP address cleared"
+
+for path in "${owned_paths[@]}" "${dynamic_paths[@]}"; do
+  case "$path" in
+    /etc/*|/usr/local/sbin/openap-*) ;;
+    /var/cache/openap/detect/report.json|/var/cache/openap/detect/report.lock|/var/cache/openap/detect/refresh.lock) ;;
+    *) echo "ERROR: unsafe removal target: $path" >&2; exit 1 ;;
+  esac
+  [ -e "$path" ] || [ -L "$path" ] || continue
+  rm -f -- "$path"
+  removed_system_paths=$((removed_system_paths + 1))
+done
+rmdir -- \
+  /etc/systemd/system/dnsmasq.service.d \
+  /etc/systemd/system/hostapd.service.d \
+  /etc/systemd/system/openap-firewall.service.d \
+  /etc/systemd/system/lighttpd.service.d \
+  /etc/systemd/system/systemd-networkd-wait-online.service.d \
+  /etc/systemd/system/NetworkManager-wait-online.service.d \
+  /var/cache/openap/detect \
+  /var/cache/openap 2>/dev/null || true
+show_progress "OpenAP helpers and system files removed"
+
+if [ -d "$webroot" ]; then
+  webroot_real="$(realpath -e "$webroot")"
+  webroot_manifest="$(mktemp /tmp/openap-uninstall-webroot.XXXXXX)"
+  case "$webroot_manifest" in
+    /tmp/openap-uninstall-webroot.*) ;;
+    *) echo "ERROR: unexpected webroot manifest path" >&2; exit 1 ;;
+  esac
+  trap 'rm -f -- "${webroot_manifest:-}"' EXIT
+  rsync -a --dry-run --ignore-times \
+    --exclude .git \
+    --exclude-from="$webroot_excludes" \
+    --out-format='%n' \
+    "$repo_dir"/ "$webroot"/ > "$webroot_manifest"
+  printf '%s\n' 'includes/config.php' >> "$webroot_manifest"
+
+  while IFS= read -r relative_path; do
+    case "$relative_path" in
+      ""|"."|*/) continue ;;
+      /*|../*|*/../*|*/..) echo "ERROR: unsafe webroot manifest entry: $relative_path" >&2; exit 1 ;;
+    esac
+    target="$webroot/$relative_path"
+    case "$target" in
+      "$webroot"/*) ;;
+      *) echo "ERROR: unsafe webroot target: $target" >&2; exit 1 ;;
+    esac
+    if [ -f "$target" ] || [ -L "$target" ]; then
+      parent_real="$(realpath -e "$(dirname "$target")")"
+      case "$parent_real" in
+        "$webroot_real"|"$webroot_real"/*) ;;
+        *) echo "ERROR: webroot target escapes through a symbolic link: $target" >&2; exit 1 ;;
+      esac
+      rm -f -- "$target"
+      removed_web_files=$((removed_web_files + 1))
+    fi
+  done < "$webroot_manifest"
+
+  while IFS= read -r relative_path; do
+    case "$relative_path" in
+      ""|".") continue ;;
+      */) relative_path="${relative_path%/}" ;;
+      *) continue ;;
+    esac
+    case "$relative_path" in
+      /*|../*|*/../*|*/..) echo "ERROR: unsafe webroot directory entry: $relative_path" >&2; exit 1 ;;
+    esac
+    target="$webroot/$relative_path"
+    if [ -d "$target" ] && [ ! -L "$target" ]; then
+      parent_real="$(realpath -e "$(dirname "$target")")"
+      case "$parent_real" in
+        "$webroot_real"|"$webroot_real"/*) ;;
+        *) echo "ERROR: webroot directory escapes through a symbolic link: $target" >&2; exit 1 ;;
+      esac
+      if rmdir -- "$target" 2>/dev/null; then
+        removed_web_dirs=$((removed_web_dirs + 1))
+      fi
+    fi
+  done < <(tac "$webroot_manifest")
+  rm -f -- "$webroot_manifest"
+  trap - EXIT
+fi
+show_progress "OpenAP web files removed"
+
+if [ "${OPENAP_KEEP_COMPONENT_MANAGER_RUNTIME:-0}" != 1 ] && [ -d /usr/local/lib/openap-installer ]; then
+  rm -rf -- /usr/local/lib/openap-installer
+fi
+show_progress "Component manager runtime removed"
+
+systemctl daemon-reload
+if systemctl is-active --quiet systemd-networkd.service; then
+  networkctl reload || true
+fi
+restore_managed_service_state
+# A stopped unit can retain a stale failed state after restoration.
+systemctl reset-failed lighttpd.service hostapd.service dnsmasq.service openap-firewall.service openap-ssh-access.service 2>/dev/null || true
+show_progress "System services reloaded"
+
+if [ -d /etc/openap ]; then
+  removed_config_entries="$(find /etc/openap -mindepth 1 -printf . 2>/dev/null | wc -c)"
+  rm -rf -- /etc/openap
+  removed_config_dir=1
+fi
+show_progress "OpenAP configuration removed"
+
+show_progress "Uninstall complete"
+
+echo
+echo "OpenAP has been uninstalled."
+echo "Removal summary:"
+echo "  OpenAP system files:       $removed_system_paths"
+echo "  OpenAP web files:          $removed_web_files"
+echo "  Empty web directories:     $removed_web_dirs"
+echo "  OpenAP config entries:     $removed_config_entries"
+if [ "$removed_config_dir" -eq 1 ]; then
+  echo "  /etc/openap directory:     removed"
+else
+  echo "  /etc/openap directory:     already absent"
+fi
+echo "Installed OS packages, firmware and drivers were retained."
+echo "A reboot is recommended after confirming that the host remains reachable."

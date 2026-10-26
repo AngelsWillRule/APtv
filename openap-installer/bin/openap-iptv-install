@@ -1,0 +1,432 @@
+#!/usr/bin/env bash
+#
+# OpenAP/APtv component installer.
+#
+# The default mode is dry-run. It can install the IPTV component on its own
+# or as the second phase of the universal OpenAP + APtv installation.
+
+set -euo pipefail
+
+apply=0
+assume_yes=0
+allow_pending_updates=0
+webroot="/var/www/html"
+component_profile="iptv"
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$repo_dir/installers/openap-auth-validate.sh"
+. "$repo_dir/installers/openap-backup-policy.sh"
+payload_dir="$repo_dir/openap-installer/iptv"
+webroot_payload="$payload_dir/webroot-overlay"
+runtime_payload="$payload_dir/runtime"
+webroot_excludes="$repo_dir/openap-installer/config/webroot-excludes.txt"
+ui_config="$repo_dir/config/config.repeater.php"
+component_runtime_dir="/usr/local/lib/openap-installer"
+component_runtime_source="$component_runtime_dir/source"
+admin_user="${OPENAP_ADMIN_USER:-admin}"
+admin_password="${OPENAP_ADMIN_PASSWORD:-}"
+backup_dir=""
+
+usage() {
+  cat <<EOF
+Usage: $0 [--apply] [--yes] [--allow-pending-updates] [--profile iptv|both] [--webroot PATH]
+
+Installs the APtv component without installing the OpenAP network stack.
+Default mode is dry-run and makes no changes.
+
+The 'iptv' profile is standalone. The 'both' profile is used after the
+universal OpenAP installer has installed the AP component.
+EOF
+}
+
+run() {
+  if [ "$apply" -eq 1 ]; then
+    printf '+ '
+    printf '%q ' "$@"
+    printf '\n'
+    "$@"
+  else
+    printf 'DRY-RUN:'
+    printf ' %q' "$@"
+    printf '\n'
+  fi
+}
+
+refresh_apt_indexes() {
+  echo
+  echo 'Refresh APT package indexes'
+  run apt-get update
+}
+
+require_file() {
+  if [ ! -f "$1" ]; then
+    echo "ERROR: required APtv payload file is missing: $1" >&2
+    exit 1
+  fi
+}
+
+backup_existing() {
+  local source="$1" destination
+  if [ ! -e "$source" ] && [ ! -L "$source" ]; then
+    return 0
+  fi
+  destination="$backup_dir$source"
+  if [ "$apply" -eq 1 ]; then
+    mkdir -p "$(dirname "$destination")"
+    cp -a "$source" "$destination"
+  else
+    echo "DRY-RUN: backup $source to $destination"
+  fi
+}
+
+install_runtime_file() {
+  local relative="$1" mode="$2"
+  run install -D -o root -g root -m "$mode" "$runtime_payload/$relative" "/$relative"
+}
+
+choose_admin_password() {
+  [ "$apply" -eq 1 ] || return 0
+  if [ -f /etc/openap/openap.auth ]; then
+    if ! openap_auth_file_is_valid /etc/openap/openap.auth; then
+      echo 'ERROR: /etc/openap/openap.auth is invalid; refusing to preserve unusable administrator credentials.' >&2
+      exit 1
+    fi
+    echo "Existing OpenAP administrator credentials will be preserved."
+    return 0
+  fi
+  if [ -n "$admin_password" ]; then
+    return 0
+  fi
+  if [ "$assume_yes" -eq 1 ] || [ ! -t 0 ]; then
+    echo "ERROR: set OPENAP_ADMIN_PASSWORD for a headless APtv installation." >&2
+    exit 1
+  fi
+  local first second entered_user
+  while true; do
+    printf 'Web administrator username [%s]: ' "$admin_user"
+    IFS= read -r entered_user
+    [ -z "$entered_user" ] || admin_user="$entered_user"
+    printf 'Web administrator password: '
+    IFS= read -r -s first
+    echo
+    if [ "${#first}" -lt 12 ] || [ "${#first}" -gt 128 ]; then
+      echo 'The administrator password must contain between 12 and 128 bytes.'
+      continue
+    fi
+    printf 'Repeat web administrator password: '
+    IFS= read -r -s second
+    echo
+    if [ "$first" = "$second" ]; then
+      admin_password="$first"
+      unset first second
+      return 0
+    fi
+    echo 'Passwords do not match. Try again.'
+  done
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply) apply=1 ;;
+    --yes|-y) assume_yes=1 ;;
+    --allow-pending-updates) allow_pending_updates=1 ;;
+    --webroot)
+      webroot="${2:-}"
+      shift
+      ;;
+    --profile)
+      component_profile="${2:-}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+case "$component_profile" in
+  iptv|both) ;;
+  *) echo "ERROR: --profile must be iptv or both." >&2; exit 1 ;;
+esac
+
+case "$webroot" in
+  /*) ;;
+  *) echo 'ERROR: --webroot must be an absolute path.' >&2; exit 1 ;;
+esac
+case "$webroot" in
+  /|/etc|/usr|/var|/home|/root)
+    echo "ERROR: unsafe webroot refused: $webroot" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$apply" -eq 1 ] && [ "$(id -u)" -ne 0 ]; then
+  echo "Apply mode must be run as root, for example: sudo $0 --apply --yes" >&2
+  exit 1
+fi
+
+for file in \
+  "$webroot_excludes" \
+  "$ui_config" \
+  "$repo_dir/templates/aptv_about.php" \
+  "$webroot_payload/index.php" \
+  "$webroot_payload/includes/components.php" \
+  "$webroot_payload/includes/iptv.php" \
+  "$webroot_payload/includes/iptv_api.php" \
+  "$webroot_payload/includes/navbar.php" \
+  "$runtime_payload/usr/lib/openap-iptv/index.php" \
+  "$runtime_payload/usr/local/sbin/openap-iptv-index" \
+  "$runtime_payload/etc/systemd/system/lighttpd.service.d/10-openap-iptv-sudo.conf" \
+  "$runtime_payload/etc/systemd/system/openap-iptv-poster-sweep.service" \
+  "$runtime_payload/etc/systemd/system/openap-iptv-poster-sweep.timer" \
+  "$payload_dir/config/55-openap-iptv-stream.conf" \
+  "$repo_dir/openap-installer/config/50-openap-router.conf" \
+  "$payload_dir/config/openap-iptv.sudoers"; do
+  require_file "$file"
+done
+
+if [ "$component_profile" = "iptv" ] && { [ -f /etc/openap/release ] || [ -f /etc/openap/components/profile ]; }; then
+  existing_profile=""
+  [ -f /etc/openap/components/profile ] && existing_profile="$(tr -d '\r\n' < /etc/openap/components/profile)"
+  if [ "$existing_profile" != "iptv" ]; then
+    echo 'ERROR: an OpenAP installation already exists; use --profile both to add APtv.' >&2
+    exit 1
+  fi
+fi
+
+if [ "$apply" -eq 1 ]; then
+  mkdir -p /var/log
+  exec > >(tee -a /var/log/openap-iptv-installer.log) 2>&1
+  echo "APtv installer started: $(date --iso-8601=seconds)"
+fi
+
+echo
+echo '============================================================'
+echo ' OpenAP/APtv component installer'
+echo '============================================================'
+echo "Operation:        $([ "$apply" -eq 1 ] && echo INSTALL || echo DRY-RUN)"
+echo "Component profile: $component_profile"
+echo "Webroot:           $webroot"
+echo 'Network stack:     not configured by this component'
+if [ "$allow_pending_updates" -eq 1 ]; then
+  echo 'Pending OS updates: tolerated by caller; no host upgrade will be performed'
+fi
+echo '============================================================'
+
+refresh_apt_indexes
+choose_admin_password
+
+packages=(
+  ca-certificates
+  curl
+  ffmpeg
+  nfs-common
+  rsync
+  sudo
+  lighttpd
+  php-cgi
+  php-cli
+  php-curl
+  php-intl
+  php-mbstring
+  php-sqlite3
+  php-xml
+  php-zip
+)
+apt_yes=()
+[ "$assume_yes" -eq 1 ] && apt_yes=(-y)
+
+echo
+echo 'Package install set'
+run apt-get install "${apt_yes[@]}" --no-install-recommends --no-upgrade "${packages[@]}"
+run apt-get check
+
+echo
+echo 'Backup existing APtv files and runtime'
+backup_dir="/root/openap-iptv-preinstall-$(date +%Y%m%d-%H%M%S)"
+run mkdir -p "$backup_dir"
+# Keep only the currently installed APtv entry points and administrator
+# configuration.  The payload itself is already available for reinstall; the
+# rest of the webroot is not a useful rollback backup.
+backup_existing "$webroot/includes/config.php"
+backup_existing "$webroot/includes/iptv.php"
+backup_existing "$webroot/includes/iptv_api.php"
+while IFS= read -r -d '' relative; do
+  backup_existing "/$relative"
+done < <(find "$runtime_payload" -type f -printf '%P\0')
+backup_existing /etc/sudoers.d/openap-iptv
+backup_existing /etc/lighttpd/conf-available/55-openap-iptv-stream.conf
+backup_existing /etc/lighttpd/conf-enabled/55-openap-iptv-stream.conf
+backup_existing /etc/openap/components/profile
+backup_existing /etc/openap/openap.auth
+backup_existing /var/lib/openap-iptv/provider.key
+backup_existing /var/lib/openap-iptv/provider.enc
+backup_existing /var/lib/openap-iptv/providers.enc
+if [ "$apply" -eq 1 ]; then
+  openap_backup_prune /root openap-iptv-preinstall
+fi
+
+echo
+echo 'Install shared web shell and APtv web payload'
+run mkdir -p "$webroot"
+run rsync -a --exclude .git --exclude-from="$webroot_excludes" "$repo_dir"/ "$webroot"/
+if [ "$apply" -eq 1 ]; then
+  if [ ! -f "$webroot/includes/config.php" ]; then
+    cp "$ui_config" "$webroot/includes/config.php"
+  else
+    echo 'SKIP: existing web administrator configuration preserved'
+  fi
+else
+  echo "DRY-RUN: copy $ui_config to $webroot/includes/config.php if missing"
+fi
+run rsync -a "$webroot_payload"/ "$webroot"/
+
+echo
+echo 'Install component manager runtime'
+run install -d -o root -g root -m 0755 "$component_runtime_source"
+if [ "$repo_dir" != "$component_runtime_source" ]; then
+  run rsync -a \
+    --exclude .git \
+    --exclude './tmp' \
+    --exclude '*/__pycache__' \
+    --exclude '*.pyc' \
+    --exclude '*.before-*' \
+    "$repo_dir"/ "$component_runtime_source"/
+fi
+run chown -R root:root "$component_runtime_dir"
+run cp "$repo_dir/installers/openap-component-manager" /usr/local/sbin/openap-component-manager
+run chown root:root /usr/local/sbin/openap-component-manager
+run chmod 0755 /usr/local/sbin/openap-component-manager
+run install -d -o root -g www-data -m 0770 /var/lib/openap-component-manager/requests
+
+if [ "$apply" -eq 1 ]; then
+  find "$webroot_payload" -type f -printf '%P\0' | while IFS= read -r -d '' relative; do
+    chown www-data:www-data "$webroot/$relative"
+    chmod 0644 "$webroot/$relative"
+  done
+else
+  echo "DRY-RUN: set APtv web payload ownership to www-data:www-data"
+fi
+
+echo
+echo 'Install APtv runtime'
+run install -d -o root -g root -m 0755 /usr/local/lib/openap /usr/local/lib/openap-recording /usr/lib/openap-iptv
+while IFS= read -r -d '' relative; do
+  install_runtime_file "$relative" 0755
+done < <(find "$runtime_payload" -type f -path "$runtime_payload/usr/*" -printf '%P\0')
+run install -d -o root -g root -m 0755 /etc/systemd/system/openap-iptv-vod-httpd.service.d
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/openap-iptv-vod-httpd.service" /etc/systemd/system/openap-iptv-vod-httpd.service
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/openap-iptv-vod-httpd.service.d/10-progressive-stats.conf" /etc/systemd/system/openap-iptv-vod-httpd.service.d/10-progressive-stats.conf
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/openap-recording.service" /etc/systemd/system/openap-recording.service
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/openap-iptv-poster-sweep.service" /etc/systemd/system/openap-iptv-poster-sweep.service
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/openap-iptv-poster-sweep.timer" /etc/systemd/system/openap-iptv-poster-sweep.timer
+run install -d -o root -g root -m 0755 /etc/systemd/system/lighttpd.service.d
+run install -D -o root -g root -m 0644 "$runtime_payload/etc/systemd/system/lighttpd.service.d/10-openap-iptv-sudo.conf" /etc/systemd/system/lighttpd.service.d/10-openap-iptv-sudo.conf
+run install -D -o root -g root -m 0755 "$runtime_payload/usr/local/sbin/openap-iptv-index" /usr/local/sbin/openap-iptv-index
+run install -D -o root -g root -m 0440 "$payload_dir/config/openap-iptv.sudoers" /etc/sudoers.d/openap-iptv
+
+echo
+echo 'Create APtv state and cache directories'
+state_directories=(
+  /etc/openap/components
+  /var/lib/openap-iptv/providers
+  /var/lib/openap-iptv/preferences
+  /var/cache/openap-iptv/epg
+  /var/cache/openap-iptv/vod-probes
+  /var/cache/openap-iptv/vod-cues
+  /var/cache/openap-iptv/vod-cache
+  /var/cache/openap-iptv/posters
+  /var/cache/openap-iptv/series-posters
+  /var/cache/openap-iptv/poster-failures
+  /var/cache/openap-iptv/series-details
+  /var/cache/openap-iptv/series-episodes
+  /var/cache/openap-iptv/episode-images
+  /var/cache/openap-iptv/vod-details
+  /var/lib/openap-recording-state
+  /var/lib/openap-recordings
+)
+for directory in "${state_directories[@]}"; do
+  run install -d -o www-data -g www-data -m 0750 "$directory"
+done
+if [ -e "$webroot/posters" ] && [ ! -L "$webroot/posters" ] && [ ! -f "$webroot/posters/.openap-poster-cache-owned" ]; then
+  echo "ERROR: refusing to replace existing non-symlink poster path: $webroot/posters" >&2
+  exit 1
+fi
+if [ -L "$webroot/posters" ]; then
+  old_target="$(readlink -f -- "$webroot/posters" || true)"
+  if [ "$old_target" = "/var/cache/openap-iptv/posters-served" ]; then
+    run rm -f -- "$webroot/posters"
+  else
+    echo "ERROR: refusing to replace unexpected poster symlink: $webroot/posters -> $old_target" >&2
+    exit 1
+  fi
+fi
+run install -d -o www-data -g www-data -m 0750 "$webroot/posters"
+run install -o www-data -g www-data -m 0640 /dev/null "$webroot/posters/.openap-poster-cache-owned"
+
+if [ "$apply" -eq 1 ]; then
+  if [ ! -f /etc/openap/openap.auth ]; then
+    admin_hash="$(printf '%s' "$admin_password" | php -r '$password = stream_get_contents(STDIN); echo password_hash($password, PASSWORD_BCRYPT);')"
+    install -d -o www-data -g www-data -m 0750 /etc/openap
+    {
+      printf '%s\n' "$admin_user"
+      printf '%s\n' "$admin_hash"
+    } > /etc/openap/openap.auth
+    chown www-data:www-data /etc/openap/openap.auth
+    chmod 0640 /etc/openap/openap.auth
+    unset admin_hash
+  fi
+else
+  echo "DRY-RUN: create administrator credentials if missing"
+fi
+
+echo
+echo 'Configure Lighttpd routing'
+run mkdir -p /etc/lighttpd/conf-available /etc/lighttpd/conf-enabled
+run install -D -o root -g root -m 0644 "$repo_dir/openap-installer/config/50-openap-router.conf" /etc/lighttpd/conf-available/50-openap-router.conf
+run ln -sf ../conf-available/50-openap-router.conf /etc/lighttpd/conf-enabled/50-openap-router.conf
+run install -D -o root -g root -m 0644 "$payload_dir/config/55-openap-iptv-stream.conf" /etc/lighttpd/conf-available/55-openap-iptv-stream.conf
+run ln -sf ../conf-available/55-openap-iptv-stream.conf /etc/lighttpd/conf-enabled/55-openap-iptv-stream.conf
+if [ ! -e /etc/lighttpd/conf-enabled/15-fastcgi-php.conf ]; then
+  if command -v lighty-enable-mod >/dev/null 2>&1; then
+    run lighty-enable-mod fastcgi-php
+  elif command -v lighttpd-enable-mod >/dev/null 2>&1; then
+    run lighttpd-enable-mod fastcgi-php
+  fi
+fi
+run lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+run systemctl enable lighttpd.service
+run systemctl daemon-reload
+run systemctl restart lighttpd.service
+
+echo
+echo 'Validate and activate APtv services'
+run visudo -cf /etc/sudoers.d/openap-iptv
+if [ "$apply" -eq 1 ]; then
+  while IFS= read -r -d '' php_file; do
+    php -l "$php_file" >/dev/null
+  done < <(find "$webroot_payload" -type f -name '*.php' -print0)
+fi
+run systemctl enable --now openap-iptv-vod-httpd.service openap-recording.service openap-iptv-poster-sweep.timer
+
+if [ "$apply" -eq 1 ]; then
+  profile_tmp="/etc/openap/components/profile.tmp.$$"
+  printf '%s\n' "$component_profile" > "$profile_tmp"
+  chown root:root "$profile_tmp"
+  chmod 0644 "$profile_tmp"
+  mv -f "$profile_tmp" /etc/openap/components/profile
+else
+  echo "DRY-RUN: atomically write /etc/openap/components/profile=$component_profile"
+fi
+
+echo
+echo 'APtv component installation complete.'
+echo "Profile:       $component_profile"
+echo "Web interface: http://<host>/aptv"
+echo "Backup:        $backup_dir"

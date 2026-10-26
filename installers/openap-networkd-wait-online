@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+wait_online=/lib/systemd/systemd-networkd-wait-online
+[ -x "$wait_online" ] || wait_online=/usr/lib/systemd/systemd-networkd-wait-online
+[ -x "$wait_online" ] || exit 1
+
+mode_file=/etc/openap/repeater.ini
+mode=""
+uplink=""
+bridge=""
+if [ -r "$mode_file" ]; then
+  mode="$(awk '
+    /^\[mode\]$/ { section="mode"; next }
+    /^\[/ { section=""; next }
+    section == "mode" && $1 == "current" && $2 == "=" { print $3; exit }
+  ' "$mode_file")"
+  uplink="$(awk '
+    /^\[interfaces\]$/ { section="interfaces"; next }
+    /^\[/ { section=""; next }
+    section == "interfaces" && $1 == "uplink" && $2 == "=" { print $3; exit }
+  ' "$mode_file")"
+  bridge="$(awk '
+    /^\[interfaces\]$/ { section="interfaces"; next }
+    /^\[/ { section=""; next }
+    section == "interfaces" && $1 == "bridge" && $2 == "=" { print $3; exit }
+  ' "$mode_file")"
+fi
+
+wait_args="--any -o routable"
+wait_for_dns=yes
+if [ "$mode" = repeater_wifi ]; then
+  case "$bridge" in
+    ''|lo|*[!A-Za-z0-9_.:-]*)
+      case "$uplink" in
+        ''|lo|*[!A-Za-z0-9_.:-]*) ;;
+        *) wait_args="-i $uplink:routable" ;;
+      esac
+      ;;
+    *)
+      # Local AP availability must not wait for the upstream Internet link.
+      # dnsmasq is ordered behind network-online.target on Ubuntu, so waiting
+      # for the bridge lets hotspot clients obtain DHCP while the uplink is
+      # still associating in the background.
+      wait_args="-i $bridge:routable"
+      wait_for_dns=no
+      ;;
+  esac
+fi
+
+# --dns is not available in every systemd-networkd-wait-online version.
+# In repeater mode, prefer the local AP bridge so an intentionally unavailable
+# upstream or physical Ethernet interface cannot delay AP DHCP.
+if [ "$wait_for_dns" = yes ] && "$wait_online" --help 2>&1 | grep -Fq -- '--dns'; then
+  # shellcheck disable=SC2086
+  exec "$wait_online" --dns $wait_args "$@"
+fi
+
+# shellcheck disable=SC2086
+exec "$wait_online" $wait_args "$@"

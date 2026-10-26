@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# OpenAP component installer and lifecycle manager.
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$repo_dir/installers/openap-auth-validate.sh"
+. "$repo_dir/installers/openap-backup-policy.sh"
+openap_install="$repo_dir/openap-installer/bin/openap-install"
+iptv_install="$repo_dir/openap-installer/bin/openap-iptv-install"
+iptv_uninstall="$repo_dir/openap-installer/bin/openap-iptv-uninstall"
+openap_uninstall="$repo_dir/openap-installer/bin/openap-uninstall"
+webroot="/var/www/html"
+assume_yes=0
+last_backup=""
+
+usage() {
+  cat <<EOF
+Usage:
+  $0                         Open the interactive component menu
+  $0 install --profile PROFILE [--yes]
+  $0 add ap|iptv [--yes]
+  $0 remove ap|iptv|all [--yes]
+  $0 status
+  $0 repair [--yes]
+
+Profiles: ap, iptv, both
+All interactive text is intentionally in English.
+EOF
+}
+
+profile() {
+  local value=""
+  if [ -r /etc/openap/components/profile ]; then
+    value="$(tr -d '\r\n' < /etc/openap/components/profile)"
+    case "$value" in openap|iptv|both) echo "$value"; return 0 ;; esac
+  fi
+  if [ -f /etc/openap/release ]; then
+    if [ -f "$webroot/includes/iptv.php" ] && [ -f "$webroot/includes/iptv_api.php" ] && [ -f /usr/lib/openap-iptv/index.php ]; then
+      echo both
+    else
+      echo openap
+    fi
+  elif [ -f "$webroot/includes/iptv.php" ] && [ -f "$webroot/includes/iptv_api.php" ]; then
+    echo iptv
+  else
+    echo none
+  fi
+}
+
+require_root() {
+  [ "$(id -u)" -eq 0 ] || { echo 'ERROR: this operation must run as root.' >&2; exit 1; }
+}
+
+confirm() {
+  local phrase="$1" answer=""
+  [ "$assume_yes" -eq 1 ] && return 0
+  [ -t 0 ] || { echo "ERROR: use --yes for unattended operation." >&2; exit 1; }
+  printf 'Type %s to continue: ' "$phrase"
+  IFS= read -r answer
+  [ "$answer" = "$phrase" ] || { echo 'Operation cancelled.'; exit 0; }
+}
+
+status() {
+  local current
+  current="$(profile)"
+  echo 'OpenAP component status'
+  echo '======================='
+  echo "Profile:       $current"
+  echo "Webroot:       $webroot"
+  echo
+  echo 'Core services:'
+  systemctl is-active lighttpd.service hostapd.service dnsmasq.service openap-firewall.service 2>&1 || true
+  echo
+  echo 'IPTV services:'
+  systemctl is-active openap-iptv-vod-httpd.service openap-recording.service 2>&1 || true
+  echo
+  echo 'SSH:'
+  ss -ltn 2>/dev/null | grep ':22 ' || echo 'SSH port 22 is not listening.'
+}
+
+backup_before_remove() {
+  local stamp backup manifest
+  if [ -e /etc/openap/openap.auth ] && ! openap_auth_file_is_valid /etc/openap/openap.auth; then
+    echo 'ERROR: /etc/openap/openap.auth is invalid; refusing component removal.' >&2
+    exit 1
+  fi
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  backup="/var/backups/openap/manager-$stamp"
+  mkdir -p "$backup"
+  chmod 0700 "$backup"
+  manifest="$backup/manifest"
+  openap_backup_manifest "$manifest" \
+    /etc/openap/openap.auth \
+    /etc/openap/components/profile \
+    /etc/openap/release \
+    /etc/openap/repeater.ini \
+    /etc/openap/wifi-roles.ini \
+    /etc/lighttpd/conf-available/55-openap-iptv-stream.conf \
+    /etc/lighttpd/conf-enabled/55-openap-iptv-stream.conf \
+    /etc/hostapd/hostapd.conf \
+    /etc/dnsmasq.d/openap-repeater.conf \
+    /etc/nftables.conf \
+    /etc/sudoers.d/090_raspap \
+    /etc/sudoers.d/openap-iptv \
+    /var/lib/openap-iptv/provider.key \
+    /var/lib/openap-iptv/provider.enc \
+    /var/lib/openap-iptv/providers.enc \
+    /usr/local/lib/openap \
+    /usr/local/lib/openap-recording \
+    /usr/lib/openap-iptv
+  openap_backup_archive "$backup/state.tar.gz" "$manifest"
+  last_backup="$backup/state.tar.gz"
+  openap_backup_prune /var/backups/openap manager
+  echo "Backup: $last_backup"
+}
+
+restore_admin_auth() {
+  local extracted
+  [ -n "$last_backup" ] || return 0
+  tar -tzf "$last_backup" 2>/dev/null | grep -F -x 'etc/openap/openap.auth' >/dev/null || return 0
+  extracted="$(mktemp /tmp/openap-auth-restore.XXXXXX)"
+  chmod 0600 "$extracted"
+  if ! tar -xOf "$last_backup" etc/openap/openap.auth > "$extracted"; then
+    rm -f -- "$extracted"
+    echo 'ERROR: unable to extract the administrator credential backup.' >&2
+    return 1
+  fi
+  if ! openap_auth_file_is_valid "$extracted"; then
+    rm -f -- "$extracted"
+    echo 'ERROR: administrator credential backup is invalid; refusing restore.' >&2
+    return 1
+  fi
+  mkdir -p /etc/openap
+  install -o www-data -g www-data -m 0640 "$extracted" /etc/openap/openap.auth
+  rm -f -- "$extracted"
+}
+
+install_profile() {
+  local target="$1" args=(--apply)
+  [ "$assume_yes" -eq 1 ] && args+=(--yes)
+  # Component operations tolerate ordinary pending OS updates while the
+  # installers still reject broken dpkg state and unresolved dependencies.
+  args+=(--allow-pending-updates)
+  case "$target" in
+    ap) "$openap_install" "${args[@]}" --components openap --webroot "$webroot" ;;
+    iptv) "$iptv_install" "${args[@]}" --profile iptv --webroot "$webroot" ;;
+    both) "$openap_install" "${args[@]}" --components both --webroot "$webroot" ;;
+    *) echo "ERROR: unsupported profile: $target" >&2; exit 1 ;;
+  esac
+}
+
+add_component() {
+  local component="$1" current args=(--apply)
+  [ "$assume_yes" -eq 1 ] && args+=(--yes)
+  # Apply the same policy to every add path, including AP added to IPTV.
+  args+=(--allow-pending-updates)
+  current="$(profile)"
+  case "$component:$current" in
+    ap:none) install_profile ap ;;
+    iptv:none) install_profile iptv ;;
+    iptv:openap) "$iptv_install" "${args[@]}" --profile both --webroot "$webroot" ;;
+    ap:iptv) "$openap_install" "${args[@]}" --components both --webroot "$webroot" ;;
+    ap:openap|iptv:iptv|ap:both|iptv:both) echo "Component already installed; no changes made." ;;
+    *) echo "ERROR: cannot add $component to current profile $current." >&2; exit 1 ;;
+  esac
+}
+
+remove_component() {
+  local component="$1" current args=(--apply --yes)
+  current="$(profile)"
+  backup_before_remove
+  case "$component:$current" in
+    iptv:both) "$iptv_uninstall" "${args[@]}" --keep-ap --webroot "$webroot" ;;
+    iptv:iptv) "$iptv_uninstall" "${args[@]}" --webroot "$webroot"; "$openap_uninstall" --apply --yes --allow-missing-release --webroot "$webroot" ;;
+    iptv:openap|iptv:none) echo 'IPTV is not installed.' ;;
+    ap:both)
+      OPENAP_KEEP_COMPONENT_MANAGER_RUNTIME=1 "$openap_uninstall" --apply --yes --webroot "$webroot"
+      restore_admin_auth
+      local iptv_args=(--apply --profile iptv --webroot "$webroot")
+      [ "$assume_yes" -eq 1 ] && iptv_args+=(--yes)
+      "$iptv_install" "${iptv_args[@]}"
+      ;;
+    ap:openap)
+      "$openap_uninstall" --apply --yes --webroot "$webroot"
+      restore_admin_auth
+      ;;
+    ap:iptv|ap:none) echo 'OpenAP is not installed.' ;;
+    all:both) "$iptv_uninstall" --apply --yes --webroot "$webroot"; "$openap_uninstall" --apply --yes --webroot "$webroot" ;;
+    all:openap) "$openap_uninstall" --apply --yes --webroot "$webroot" ;;
+    all:iptv) "$iptv_uninstall" --apply --yes --webroot "$webroot"; "$openap_uninstall" --apply --yes --allow-missing-release --webroot "$webroot" ;;
+    all:none) echo 'No OpenAP components are installed.' ;;
+    *) echo "ERROR: cannot remove $component from current profile $current." >&2; exit 1 ;;
+  esac
+}
+
+repair() {
+  local current="$(profile)"
+  [ "$current" != none ] || { echo 'ERROR: no installed profile to repair.' >&2; exit 1; }
+  install_profile "$current"
+}
+
+menu() {
+  local choice="" current=""
+  while true; do
+    current="$(profile)"
+    case "$current" in
+      none)
+        cat <<'EOF'
+
+============================================================
+ APtv installer
+============================================================
+No component is currently installed.
+  1) Install complete APtv (OpenAP + IPTV)
+  2) Install standalone OpenAP (AP)
+  3) Install standalone APtv (IPTV)
+  4) Show status
+  5) Exit
+============================================================
+EOF
+        printf 'Choose an option [1-5]: '
+        IFS= read -r choice
+        case "$choice" in
+          1) confirm APPLY; install_profile both ;;
+          2) confirm APPLY; install_profile ap ;;
+          3) confirm APPLY; install_profile iptv ;;
+          4) status ;;
+          5) echo 'No further changes.'; return 0 ;;
+          *) echo 'Enter a number from 1 to 5.' ;;
+        esac
+        ;;
+      openap)
+        cat <<'EOF'
+
+============================================================
+ APtv installer
+============================================================
+Installed components: OpenAP
+  1) Add APtv IPTV component
+  2) Remove OpenAP
+  3) Show status
+  4) Repair OpenAP
+  5) Exit
+============================================================
+EOF
+        printf 'Choose an option [1-5]: '
+        IFS= read -r choice
+        case "$choice" in
+          1) confirm APPLY; add_component iptv ;;
+          2) confirm 'REMOVE OPENAP'; remove_component ap ;;
+          3) status ;;
+          4) confirm APPLY; repair ;;
+          5) echo 'No further changes.'; return 0 ;;
+          *) echo 'Enter a number from 1 to 5.' ;;
+        esac
+        ;;
+      iptv)
+        cat <<'EOF'
+
+============================================================
+ APtv installer
+============================================================
+Installed components: APtv IPTV
+  1) Add OpenAP component
+  2) Remove APtv IPTV
+  3) Show status
+  4) Repair APtv IPTV
+  5) Exit
+============================================================
+EOF
+        printf 'Choose an option [1-5]: '
+        IFS= read -r choice
+        case "$choice" in
+          1) confirm APPLY; add_component ap ;;
+          2) confirm 'REMOVE IPTV'; remove_component iptv ;;
+          3) status ;;
+          4) confirm APPLY; repair ;;
+          5) echo 'No further changes.'; return 0 ;;
+          *) echo 'Enter a number from 1 to 5.' ;;
+        esac
+        ;;
+      both)
+        cat <<'EOF'
+
+============================================================
+ APtv installer
+============================================================
+Installed components: OpenAP + APtv IPTV
+  1) Remove OpenAP (keep APtv IPTV)
+  2) Remove APtv IPTV (keep OpenAP)
+  3) Remove both components
+  4) Show status
+  5) Repair complete installation
+  6) Exit
+============================================================
+EOF
+        printf 'Choose an option [1-6]: '
+        IFS= read -r choice
+        case "$choice" in
+          1) confirm 'REMOVE OPENAP'; remove_component ap ;;
+          2) confirm 'REMOVE IPTV'; remove_component iptv ;;
+          3) confirm 'REMOVE ALL'; remove_component all ;;
+          4) status ;;
+          5) confirm APPLY; repair ;;
+          6) echo 'No further changes.'; return 0 ;;
+          *) echo 'Enter a number from 1 to 6.' ;;
+        esac
+        ;;
+      *)
+        echo "ERROR: unknown component state: $current" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+command="${1:-menu}"
+[ "$command" = menu ] || shift || true
+positionals=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --yes|-y) assume_yes=1 ;;
+    --webroot) webroot="${2:-}"; shift ;;
+    --profile) profile_arg="${2:-}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) positionals+=("$1") ;;
+  esac
+  shift
+done
+set -- "${positionals[@]}"
+
+case "$command" in
+  menu) [ -t 0 ] || { echo 'ERROR: interactive menu requires a terminal.' >&2; exit 1; }; require_root; menu ;;
+  status) status ;;
+  install) require_root; target="${profile_arg:-${1:-}}"; [ -n "${target:-}" ] || { echo 'ERROR: install requires --profile ap|iptv|both.' >&2; exit 1; }; confirm APPLY; install_profile "$target" ;;
+  add) require_root; component="${1:-}"; case "$component" in ap|iptv) ;; *) echo 'ERROR: add requires ap or iptv.' >&2; exit 1 ;; esac; confirm APPLY; add_component "$component" ;;
+  remove) require_root; component="${1:-}"; case "$component" in ap|iptv|all) ;; *) echo 'ERROR: remove requires ap, iptv or all.' >&2; exit 1 ;; esac; confirm "REMOVE $([ "$component" = all ] && echo ALL || [ "$component" = ap ] && echo OPENAP || echo IPTV)"; remove_component "$component" ;;
+  repair) require_root; confirm APPLY; repair ;;
+  -h|--help) usage ;;
+  *) echo "Unknown command: $command" >&2; usage >&2; exit 1 ;;
+esac

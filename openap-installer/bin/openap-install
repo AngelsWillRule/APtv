@@ -1,0 +1,2402 @@
+#!/usr/bin/env bash
+#
+# OpenAP universal installer for supported Debian-based systems.
+#
+# Default mode is dry-run. Use --apply to install packages and files.
+
+set -euo pipefail
+
+apply=0
+assume_yes=0
+allow_pending_updates=0
+component_profile="openap"
+component_profile_explicit=0
+webroot="/var/www/html"
+mode="ap-ethernet"
+ap_iface_override="${OPENAP_AP_IFACE:-}"
+dns_mode="auto"
+dns_mode_selected=""
+wireless_country_override="${OPENAP_WIRELESS_COUNTRY:-}"
+wireless_country=""
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$repo_dir/installers/openap-auth-validate.sh"
+. "$repo_dir/installers/openap-backup-policy.sh"
+network_migration_helper="$repo_dir/installers/openap-migrate-ifupdown-networkd.sh"
+manager="$repo_dir/openap-installer/bin/openap-manager"
+component_runtime_dir="/usr/local/lib/openap-installer"
+component_runtime_source="$component_runtime_dir/source"
+
+if [ "$#" -eq 0 ] && [ -t 0 ] && [ -t 1 ] \
+  && [ "${OPENAP_COMPONENT_MANAGER_CHILD:-0}" != 1 ] \
+  && [ -x "$repo_dir/aptv-install.sh" ]; then
+  exec "$repo_dir/aptv-install.sh"
+fi
+detector="$repo_dir/openap-installer/bin/openap-detect"
+dual_hostapd_generator="$repo_dir/openap-installer/bin/openap-generate-dual-hostapd"
+dual_hostapd_applier="$repo_dir/openap-installer/bin/openap-apply-dual-hostapd"
+webroot_excludes="$repo_dir/openap-installer/config/webroot-excludes.txt"
+version_file="$repo_dir/VERSION"
+release_file="/etc/openap/release"
+uninstaller="$repo_dir/openap-installer/bin/openap-uninstall"
+interface_switcher="$repo_dir/openap-installer/bin/openap-switch-interfaces"
+sudoers_name="090_openap_universal"
+admin_user="${OPENAP_ADMIN_USERNAME:-admin}"
+admin_password="${OPENAP_ADMIN_PASSWORD:-}"
+admin_credentials_preserved=0
+hotspot_ssid="${OPENAP_HOTSPOT_SSID:-OpenAP}"
+hotspot_password="${OPENAP_HOTSPOT_PASSWORD:-}"
+hotspot_credentials_preserved=0
+credential_tty_available=0
+previous_ap_iface=""
+previous_ap_gateway=""
+stale_networkd_ap_ifaces=""
+wireless_regdb_missing=0
+reboot_required=0
+raspberry_native=0
+address_backend="systemd-networkd"
+firewall_backend="openap-firewall"
+hostapd_config="/etc/hostapd/hostapd.conf"
+ui_config="$repo_dir/config/config.repeater.php"
+service_state_work=""
+package_start_policy_active=0
+package_start_policy_backup=""
+network_migration_consent=0
+managed_services=(
+  hostapd.service
+  dnsmasq.service
+  dnscrypt-proxy.service
+  dnscrypt-proxy.socket
+  dnscrypt-proxy-resolvconf.service
+  lighttpd.service
+  lighttpd-maint.timer
+  phpsessionclean.timer
+)
+
+# Keep a dedicated terminal descriptor for the one-time credential recap.
+# Long-running package and service commands may alter stdin semantics, while
+# this descriptor remains tied to the controlling terminal for the full run.
+if [ -t 0 ] && { exec 3<>/dev/tty; } 2>/dev/null; then
+  credential_tty_available=1
+fi
+
+if [ -r /proc/device-tree/model ] \
+  && tr -d '\0' < /proc/device-tree/model | grep -Fqi 'Raspberry Pi'; then
+  raspberry_native=1
+  address_backend="openap-ap-address"
+  hostapd_config="/etc/openap/hostapd/hostapd.conf"
+  ui_config="$repo_dir/config/config.raspberry.php"
+fi
+
+if [ -r /etc/os-release ]; then
+  . /etc/os-release
+  if [ "${ID:-}" = "debian" ] \
+    && ! dpkg-query -W -f='${db:Status-Abbrev}' wireless-regdb 2>/dev/null | grep -q '^ii '; then
+    wireless_regdb_missing=1
+  fi
+fi
+
+usage() {
+  cat <<EOF
+Usage: $0 [--apply] [--yes] [--allow-pending-updates] [--components openap|iptv|both] [--ap-iface IFACE] [--country CC] [--dns-mode auto|local|external] [--webroot /var/www/html]
+
+Installs OpenAP components on a minimal Debian/Ubuntu-like system.
+
+Components:
+  openap     OpenAP network stack and AP workspace only (default for --yes).
+  iptv       APtv workspace and IPTV runtime only.
+  both       OpenAP and APtv together.
+
+Default mode is dry-run and makes no changes.
+
+When applying an installation, pending operating-system updates block the
+run by default. Use --allow-pending-updates only when you explicitly accept
+continuing without upgrading the host first; OpenAP still refuses broken
+dpkg state and unresolved APT dependencies.
+
+When run without arguments from an interactive terminal, this entrypoint opens
+the English OpenAP component manager.
+
+OpenAP has one validated installation flow: an Ethernet uplink with a default
+Wi-Fi hotspot. Repeater mode is a post-install runtime option offered by the UI
+when a second usable Wi-Fi interface is detected.
+
+DNS modes:
+  auto      Use local dnsmasq DNS when 10.88.77.1:53 is available; otherwise
+            keep dnsmasq DHCP-only and advertise external DNS (default).
+  local     Require dnsmasq DHCP+DNS on 10.88.77.1:53; abort on conflict.
+  external  Use dnsmasq DHCP-only and advertise 1.1.1.1 and 1.0.0.1.
+
+Interactive standard installs also ask for the initial hotspot SSID and
+password, regulatory country and web administrator credentials. The initial
+security mode is WPA2-Personal (WPA2-PSK, AES/CCMP). CC is a two-letter ISO
+3166-1 country code, for example IT.
+EOF
+}
+
+show_installed_menu() {
+  local installed_version="unknown" choice=""
+  installed_version="$(sed -n 's/^version=//p' "$release_file" | head -n 1)"
+  installed_version="${installed_version:-unknown}"
+
+  if [ ! -t 0 ]; then
+    echo "ERROR: OpenAP $installed_version is already installed and maintenance requires an interactive terminal." >&2
+    exit 1
+  fi
+
+  cat <<EOF
+
+============================================================
+ OpenAP $installed_version maintenance
+============================================================
+  1) Switch AP and Wi-Fi uplink adapters
+  2) Uninstall OpenAP
+  3) Exit
+============================================================
+EOF
+  while true; do
+    printf "Choose an option [1-3]: "
+    IFS= read -r choice
+    case "$choice" in
+      1)
+        args=()
+        [ "$apply" -eq 0 ] || args+=(--apply)
+        exec "$interface_switcher" "${args[@]}"
+        ;;
+      2)
+        args=()
+        [ "$apply" -eq 0 ] || args+=(--apply)
+        [ "$assume_yes" -eq 0 ] || args+=(--yes)
+        args+=(--webroot "$webroot")
+        exec "$uninstaller" "${args[@]}"
+        ;;
+      3)
+        echo "No changes were made."
+        exit 0
+        ;;
+      *) echo "Enter 1, 2 or 3." ;;
+    esac
+  done
+}
+
+show_welcome() {
+  local operation="DRY-RUN"
+  [ "$apply" -eq 1 ] && operation="INSTALL"
+  cat <<EOF
+
+============================================================
+ Welcome to the OpenAP universal installer
+============================================================
+Operation:        $operation
+Installation:     AP over Ethernet
+Components:       $component_profile
+DNS policy:       $dns_mode
+Hotspot security: WPA2-Personal (WPA2-PSK, AES/CCMP)
+
+Available DNS modes: auto (default), local, external
+Use --help to display every command-line option.
+EOF
+  cat <<'EOF'
+The standard AP-over-Ethernet profile will:
+  1. detect the effective Ethernet uplink automatically;
+  2. let you select the Wi-Fi interface used by the hotspot;
+  3. ask for regulatory country, hotspot SSID/password and web administrator credentials;
+  4. install the web UI, DHCP/DNS, firewall and hotspot services.
+EOF
+  echo "============================================================"
+}
+
+confirm_welcome() {
+  [ "$assume_yes" -eq 0 ] || return 0
+  if [ ! -t 0 ]; then
+    echo "ERROR: confirmation at the welcome screen requires an interactive terminal." >&2
+    echo "Re-run interactively, or use --yes for an unattended installation." >&2
+    exit 1
+  fi
+
+  local key=""
+  echo
+  printf "Press ENTER to proceed or ESC to exit. "
+  while true; do
+    IFS= read -r -s -n 1 key || {
+      echo
+      echo "Input closed; installer cancelled."
+      exit 1
+    }
+    case "$key" in
+      "")
+        echo
+        return 0
+        ;;
+      $'\e')
+        echo
+        echo "Installation cancelled by the user."
+        exit 0
+        ;;
+    esac
+  done
+}
+
+generate_secret() {
+  od -An -N16 -tx1 /dev/urandom | tr -d ' \n'
+}
+
+offer_required_reboot() {
+  [ "$apply" -eq 1 ] || return 0
+  [ "$reboot_required" -eq 1 ] || return 0
+
+  echo
+  echo "============================================================"
+  echo " SYSTEM REBOOT REQUIRED"
+  echo "============================================================"
+  echo "Debian wireless-regdb was installed during this run."
+  echo "A reboot is required before the selected regulatory country and"
+  echo "the complete 5 GHz channel list are reliably available."
+
+  if [ "$assume_yes" -eq 1 ] || [ ! -t 0 ]; then
+    echo "The installer will not reboot automatically in unattended mode."
+    echo "Reboot the system before using OpenAP 5 GHz: systemctl reboot"
+    return 0
+  fi
+
+  local answer=""
+  printf "Reboot now? [y/N]: "
+  IFS= read -r answer
+  case "$answer" in
+    y|Y|yes|YES|Yes)
+      echo "Rebooting the system..."
+      systemctl reboot
+      ;;
+    *)
+      echo "Reboot postponed. Run 'systemctl reboot' before using OpenAP 5 GHz."
+      ;;
+  esac
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply)
+      apply=1
+      ;;
+    --yes|-y)
+      assume_yes=1
+      ;;
+    --allow-pending-updates)
+      allow_pending_updates=1
+      ;;
+    --components)
+      component_profile="${2:-}"
+      component_profile_explicit=1
+      shift
+      ;;
+    --webroot)
+      webroot="${2:-}"
+      shift
+      ;;
+    --ap-iface)
+      ap_iface_override="${2:-}"
+      shift
+      ;;
+    --dns-mode)
+      dns_mode="${2:-}"
+      shift
+      ;;
+    --country)
+      wireless_country_override="${2:-}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+case "$component_profile" in
+  openap|iptv|both) ;;
+  *)
+    echo "Invalid --components value: $component_profile (expected openap, iptv or both)" >&2
+    exit 1
+    ;;
+esac
+
+choose_component_profile() {
+  [ "$component_profile_explicit" -eq 0 ] || return 0
+  [ "$assume_yes" -eq 0 ] || return 0
+  [ -t 0 ] || return 0
+  [ -f "$release_file" ] && return 0
+
+  local choice=""
+  cat <<'EOF'
+
+============================================================
+ OpenAP component selection
+============================================================
+  1) OpenAP only
+  2) APtv only
+  3) OpenAP + APtv
+============================================================
+EOF
+  while true; do
+    printf "Choose components [1-3, default 3]: "
+    IFS= read -r choice
+    case "$choice" in
+      ""|3) component_profile="both"; return 0 ;;
+      1) component_profile="openap"; return 0 ;;
+      2) component_profile="iptv"; return 0 ;;
+      *) echo "Enter 1, 2 or 3." ;;
+    esac
+  done
+}
+
+choose_component_profile
+
+if [ "$component_profile" = "openap" ]; then
+  existing_profile=""
+  [ -f /etc/openap/components/profile ] && existing_profile="$(tr -d '\r\n' < /etc/openap/components/profile)"
+  legacy_iptv=0
+  if [ -f "$webroot/includes/iptv.php" ] && [ -f "$webroot/includes/iptv_api.php" ] \
+    && [ -f /usr/lib/openap-iptv/index.php ]; then
+    legacy_iptv=1
+  fi
+  if { [ -n "$existing_profile" ] && [ "$existing_profile" != "openap" ]; } \
+    || [ "$legacy_iptv" -eq 1 ]; then
+    echo "ERROR: an APtv component is already installed; remove it explicitly before selecting OpenAP only." >&2
+    exit 1
+  fi
+fi
+
+if [ "$component_profile" = "iptv" ]; then
+  args=(--profile iptv --webroot "$webroot")
+  [ "$apply" -eq 1 ] && args+=(--apply)
+  [ "$assume_yes" -eq 1 ] && args+=(--yes)
+  [ "$allow_pending_updates" -eq 1 ] && args+=(--allow-pending-updates)
+  exec "$repo_dir/openap-installer/bin/openap-iptv-install" "${args[@]}"
+fi
+
+case "$dns_mode" in
+  auto|local|external) ;;
+  *)
+    echo "Invalid DNS mode: $dns_mode (expected auto, local or external)" >&2
+    exit 1
+    ;;
+esac
+
+if [ -f "$release_file" ] && [ "$assume_yes" -eq 0 ] && [ "$component_profile_explicit" -eq 0 ] && [ -z "$ap_iface_override" ]; then
+  show_installed_menu
+fi
+
+normalize_country() {
+  printf '%s' "$1" | tr '[:lower:]' '[:upper:]'
+}
+
+valid_country() {
+  case "$1" in
+    [A-Z][A-Z]) [ "$1" != "00" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+detect_wireless_country() {
+  local detected="" locale_country=""
+  if [ -r "$hostapd_config" ]; then
+    detected="$(sed -n 's/^country_code=//p' "$hostapd_config" | head -n 1)"
+    detected="$(normalize_country "$detected")"
+    if valid_country "$detected"; then
+      printf '%s\n' "$detected"
+      return 0
+    fi
+  fi
+  if command -v iw >/dev/null 2>&1; then
+    detected="$(iw reg get 2>/dev/null | sed -n 's/^country \([A-Za-z][A-Za-z]\):.*/\1/p' | head -n 1)"
+    detected="$(normalize_country "$detected")"
+    if valid_country "$detected"; then
+      printf '%s\n' "$detected"
+      return 0
+    fi
+  fi
+  locale_country="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  locale_country="$(printf '%s' "$locale_country" | sed -n 's/^[A-Za-z][A-Za-z]_\([A-Za-z][A-Za-z]\).*/\1/p')"
+  locale_country="$(normalize_country "$locale_country")"
+  if valid_country "$locale_country"; then
+    printf '%s\n' "$locale_country"
+  fi
+}
+
+choose_wireless_country() {
+  [ "$apply" -eq 1 ] || return 0
+  [ "$mode" = "ap-ethernet" ] || return 0
+
+  local detected choice
+  detected="$(detect_wireless_country)"
+  if [ -n "$wireless_country_override" ]; then
+    wireless_country="$(normalize_country "$wireless_country_override")"
+    if ! valid_country "$wireless_country"; then
+      echo "ERROR: invalid --country value: $wireless_country_override (expected a two-letter code such as IT)" >&2
+      exit 1
+    fi
+    echo "Wireless regulatory country selected from --country: $wireless_country"
+    return 0
+  fi
+
+  if [ "$assume_yes" -eq 1 ]; then
+    if ! valid_country "$detected"; then
+      echo "ERROR: --yes could not detect a valid wireless regulatory country." >&2
+      echo "Re-run with an explicit two-letter country code, for example --country IT." >&2
+      exit 1
+    fi
+    wireless_country="$detected"
+    echo "Wireless regulatory country detected: $wireless_country"
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "ERROR: wireless regulatory country must be chosen, but stdin is not interactive." >&2
+    echo "Re-run interactively or specify a two-letter code with --country, for example --country IT." >&2
+    exit 1
+  fi
+
+  echo
+  echo "Configure the wireless regulatory country."
+  echo "This controls the Wi-Fi channels and transmit limits OpenAP may use."
+  while true; do
+    if [ -n "$detected" ]; then
+      printf "Country code [detected: %s]: " "$detected"
+    else
+      printf "Country code (two letters, for example IT): "
+    fi
+    IFS= read -r choice
+    choice="$(normalize_country "${choice:-$detected}")"
+    if valid_country "$choice"; then
+      wireless_country="$choice"
+      echo "Wireless regulatory country: $wireless_country"
+      return 0
+    fi
+    echo "Enter a valid two-letter ISO country code; 00 is not valid for an access point."
+  done
+}
+
+set_config_value() {
+  local file="$1" key="$2" value="$3"
+  if grep -q "^${key}=" "$file"; then
+    sed -i "s/^${key}=.*/${key}=${value}/" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+append_wifi_sudoers_rules() {
+  local sudoers_file="$1"
+  python3 - "$sudoers_file" "$wireless_country" <<'PY'
+import json
+import re
+import sys
+
+path, country = sys.argv[1:]
+with open("/tmp/openap-detect.json", encoding="utf-8") as stream:
+    detected = json.load(stream)
+
+interfaces = sorted({
+    item.get("name", "")
+    for item in detected.get("interfaces", [])
+    if item.get("is_wireless") and re.fullmatch(r"[A-Za-z0-9_.-]+", item.get("name", ""))
+})
+
+rules = []
+for interface in interfaces:
+    rules.extend([
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/hostapd_cli -p /run/hostapd -i {interface} all_sta",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/hostapd_cli -p /run/hostapd -i {interface} status",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/wpa_cli -i {interface} status",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/wpa_cli -i {interface} signal_poll",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/wpa_cli -i {interface} scan",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/wpa_cli -i {interface} scan_results",
+        f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/iw dev {interface} scan",
+    ])
+
+rules.append("www-data ALL=(ALL) NOPASSWD:/usr/sbin/iw reg get")
+if re.fullmatch(r"[A-Z]{2}", country):
+    rules.append(f"www-data ALL=(ALL) NOPASSWD:/usr/sbin/iw reg set {country}")
+
+with open(path, "a", encoding="utf-8") as stream:
+    stream.write("\n# Generated exact Wi-Fi rules (sudo and sudo-rs compatible)\n")
+    stream.write("\n".join(rules))
+    stream.write("\n")
+PY
+}
+
+run() {
+  if [ "$apply" -eq 1 ]; then
+    echo "+ $*"
+    "$@"
+  else
+    echo "DRY-RUN: $*"
+  fi
+}
+
+refresh_apt_indexes() {
+  echo
+  echo "Refresh APT package indexes"
+  run apt-get update
+}
+
+prepare_network_migration() {
+  [ "$apply" -eq 1 ] || return 0
+  systemctl is-active --quiet networking.service || return 0
+  systemctl is-active --quiet systemd-networkd.service && return 0
+
+  network_migration_validation="$(bash "$network_migration_helper" --validate-only)"
+  printf '%s\n' "$network_migration_validation"
+  printf '%s\n' "$network_migration_validation" \
+    | grep -Fq 'Convertible ifupdown interface:' || return 0
+
+  echo
+  echo "WARNING: OpenAP can migrate the active ifupdown Ethernet configuration"
+  echo "to systemd-networkd now. This may interrupt the network and disconnect"
+  echo "SSH. Continue only if local console or equivalent recovery access exists."
+  if [ "$assume_yes" -eq 1 ]; then
+    echo "Network migration consent received via --yes."
+    network_migration_consent=1
+  elif [ "$credential_tty_available" -eq 1 ]; then
+    answer=""
+    printf "Migrate the active network configuration now? [y/N]: " >&3
+    IFS= read -r answer <&3
+    case "$answer" in
+      y|Y|yes|YES|Yes) network_migration_consent=1 ;;
+      *) echo "Network migration declined; the network configuration will not be changed." ;;
+    esac
+  else
+    echo "No interactive consent available; network migration will not be performed." >&2
+  fi
+}
+
+write_file() {
+  local path="$1"
+  local content="$2"
+  if [ "$apply" -eq 1 ]; then
+    printf '%s\n' "$content" > "$path"
+  else
+    echo "DRY-RUN: write $path"
+  fi
+}
+
+copy_if_exists() {
+  local src="$1"
+  local dst="$2"
+  if [ -e "$src" ]; then
+    run cp -a "$src" "$dst"
+  else
+    echo "SKIP: $src not found"
+  fi
+}
+
+capture_service_state() {
+  local state_dir service key package enabled active package_preexisting config_preexisting
+  [ "$apply" -eq 1 ] || {
+    echo "DRY-RUN: record pre-OpenAP package, service and dnscrypt-proxy configuration state"
+    return 0
+  }
+  state_dir="$(mktemp -d /tmp/openap-service-state.XXXXXX)"
+  service_state_work="$state_dir"
+  config_preexisting=false
+  if [ -f /etc/dnscrypt-proxy/dnscrypt-proxy.toml ]; then
+    cp -a /etc/dnscrypt-proxy/dnscrypt-proxy.toml "$state_dir/dnscrypt-proxy.toml"
+    config_preexisting=true
+  fi
+  {
+    printf 'format_version=1\n'
+    printf 'dnscrypt_config_preexisting=%s\n' "$config_preexisting"
+    for service in "${managed_services[@]}"; do
+      key="${service//[.-]/_}"
+      case "$service" in
+        hostapd.service) package=hostapd ;;
+        dnsmasq.service) package=dnsmasq ;;
+        dnscrypt-proxy.service|dnscrypt-proxy.socket|dnscrypt-proxy-resolvconf.service) package=dnscrypt-proxy ;;
+        lighttpd.service|lighttpd-maint.timer) package=lighttpd ;;
+        phpsessionclean.timer) package=php-common ;;
+      esac
+      package_preexisting=false
+      dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null | grep -q '^ii ' \
+        && package_preexisting=true
+      enabled="$(systemctl is-enabled "$service" 2>/dev/null || true)"
+      active="$(systemctl is-active "$service" 2>/dev/null || true)"
+      printf 'service_%s_package=%s\n' "$key" "$package"
+      printf 'service_%s_package_preexisting=%s\n' "$key" "$package_preexisting"
+      printf 'service_%s_enabled_before=%s\n' "$key" "${enabled:-not-found}"
+      printf 'service_%s_active_before=%s\n' "$key" "${active:-inactive}"
+    done
+  } > "$state_dir/install-state.env"
+}
+
+inhibit_package_service_starts() {
+  [ "$apply" -eq 1 ] || {
+    echo "DRY-RUN: stop managed services and inhibit package service starts during installation"
+    return 0
+  }
+  systemctl stop "${managed_services[@]}" 2>/dev/null || true
+  package_start_policy_backup="$(mktemp -d /tmp/openap-policy-rc.d.XXXXXX)"
+  if [ -e /usr/sbin/policy-rc.d ] || [ -L /usr/sbin/policy-rc.d ]; then
+    cp -a /usr/sbin/policy-rc.d "$package_start_policy_backup/policy-rc.d"
+  fi
+  rm -f -- /usr/sbin/policy-rc.d
+  cat > /usr/sbin/policy-rc.d <<'EOF'
+#!/bin/sh
+# Temporarily installed by OpenAP while packages are configured.
+exit 101
+EOF
+  chmod 0755 /usr/sbin/policy-rc.d
+  package_start_policy_active=1
+}
+
+release_package_start_policy() {
+  [ "$package_start_policy_active" -eq 1 ] || return 0
+  if [ -e "$package_start_policy_backup/policy-rc.d" ] \
+    || [ -L "$package_start_policy_backup/policy-rc.d" ]; then
+    rm -f -- /usr/sbin/policy-rc.d
+    cp -a "$package_start_policy_backup/policy-rc.d" /usr/sbin/policy-rc.d
+  else
+    rm -f -- /usr/sbin/policy-rc.d
+  fi
+  rm -rf -- "$package_start_policy_backup"
+  package_start_policy_backup=""
+  package_start_policy_active=0
+}
+
+disable_new_dnscrypt_services() {
+  local preexisting
+  [ "$apply" -eq 1 ] || return 0
+  preexisting="$(awk -F= '$1 == "service_dnscrypt_proxy_service_package_preexisting" {print $2}' \
+    "$service_state_work/install-state.env")"
+  [ "$preexisting" = true ] && return 0
+  systemctl disable --now dnscrypt-proxy.service dnscrypt-proxy.socket \
+    dnscrypt-proxy-resolvconf.service >/dev/null 2>&1 || true
+}
+
+resume_preexisting_dnscrypt_services() {
+  local service key active_before
+  [ "$apply" -eq 1 ] || return 0
+  for service in dnscrypt-proxy.socket dnscrypt-proxy.service dnscrypt-proxy-resolvconf.service; do
+    key="${service//[.-]/_}"
+    active_before="$(awk -F= -v wanted="service_${key}_active_before" \
+      '$1 == wanted {print $2}' "$service_state_work/install-state.env")"
+    [ "$active_before" = active ] || continue
+    systemctl start "$service"
+  done
+}
+
+installer_exit_cleanup() {
+  local exit_status=$?
+  release_package_start_policy
+  [ -z "$service_state_work" ] || [ ! -d "$service_state_work" ] \
+    || rm -rf -- "$service_state_work"
+  if [ "$exit_status" -ne 0 ]; then
+    echo "ERROR: OpenAP installer stopped before completion (exit status: $exit_status)." >&2
+  fi
+  return "$exit_status"
+}
+
+persist_service_state() {
+  local target=/etc/openap/preinstall-state config_preexisting
+  [ "$apply" -eq 1 ] || return 0
+  [ -n "$service_state_work" ] && [ -r "$service_state_work/install-state.env" ] || {
+    echo "ERROR: pre-install service state was not captured" >&2
+    exit 1
+  }
+  mkdir -p "$target"
+  install -o root -g root -m 0600 "$service_state_work/install-state.env" "$target/install-state.env"
+  config_preexisting="$(awk -F= '$1 == "dnscrypt_config_preexisting" {print $2}' "$service_state_work/install-state.env")"
+  if [ "$config_preexisting" = true ]; then
+    install -o root -g root -m 0600 "$service_state_work/dnscrypt-proxy.toml" "$target/dnscrypt-proxy.toml"
+  elif [ -f /etc/dnscrypt-proxy/dnscrypt-proxy.toml ]; then
+    # Preserve the package default so a package retained after uninstall is
+    # left with a valid, non-OpenAP configuration.
+    install -o root -g root -m 0600 /etc/dnscrypt-proxy/dnscrypt-proxy.toml "$target/dnscrypt-proxy.toml"
+  fi
+}
+
+migrate_legacy_config_tree() {
+  local legacy_dir="/etc/raspap"
+  local config_dir="/etc/openap"
+  local marker="$config_dir/.migrated-from-raspap"
+  local migration_backup=""
+
+  [ -d "$legacy_dir" ] || return 0
+  if [ -f "$marker" ]; then
+    return 0
+  fi
+
+  if [ "$apply" -eq 0 ]; then
+    echo "DRY-RUN: copy legacy $legacy_dir into $config_dir and retain the source as rollback"
+    return 0
+  fi
+
+  migration_backup="/root/openap-legacy-config-pre-migration-$(date +%Y%m%d-%H%M%S)"
+  echo "Migrate legacy configuration: $legacy_dir -> $config_dir"
+  mkdir -p "$migration_backup" "$config_dir"
+  cp -a "$legacy_dir" "$migration_backup/"
+  cp -an "$legacy_dir"/. "$config_dir"/
+  if [ -f "$legacy_dir/raspap.auth" ] && [ ! -f "$config_dir/openap.auth" ]; then
+    cp -a "$legacy_dir/raspap.auth" "$config_dir/openap.auth"
+  fi
+  touch "$marker"
+  echo "Legacy configuration retained at $legacy_dir for rollback."
+  echo "Pre-migration backup: $migration_backup/raspap"
+}
+
+require_file() {
+  if [ ! -f "$1" ]; then
+    echo "Missing required file: $1" >&2
+    exit 1
+  fi
+}
+
+os_supported() {
+  local id="" like=""
+  if [ -r /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    id="${ID:-}"
+    like="${ID_LIKE:-}"
+  fi
+  case " $id $like " in
+    *" debian "*|*" ubuntu "*|*" neon "*) return 0 ;;
+  esac
+  return 1
+}
+
+platform_update_preflight() {
+  local audit_output="" simulation="" summary="" upgraded="" newly_installed="" removed="" held=""
+
+  echo
+  echo "Operating-system update preflight"
+  if [ "$apply" -eq 0 ]; then
+    echo "DRY-RUN: require current APT indexes, a clean dpkg state and no pending dist-upgrade actions"
+    echo "DRY-RUN: do not update, repair or upgrade the operating system"
+    return 0
+  fi
+
+  refresh_apt_indexes
+
+  if ! find /var/lib/apt/lists -maxdepth 1 -type f -name '*_Packages*' -print -quit 2>/dev/null \
+      | grep -q .; then
+    echo "ERROR: APT package indexes are unavailable." >&2
+    echo "OpenAP requires an operating system updated before installation." >&2
+    echo "Run 'sudo apt update' and 'sudo apt full-upgrade', reboot if required, then run the installer again." >&2
+    exit 1
+  fi
+
+  audit_output="$(dpkg --audit 2>&1 || true)"
+  if [ -n "$audit_output" ]; then
+    echo "ERROR: dpkg reports incomplete or inconsistent package state:" >&2
+    printf '%s\n' "$audit_output" >&2
+    echo "Repair and fully update the operating system before installing OpenAP." >&2
+    echo "Typical administrator commands are 'sudo dpkg --configure -a' and 'sudo apt --fix-broken install'." >&2
+    exit 1
+  fi
+
+  if ! LC_ALL=C apt-get check >/dev/null; then
+    echo "ERROR: APT reports broken package dependencies." >&2
+    echo "Repair and fully update the operating system before installing OpenAP." >&2
+    echo "OpenAP will not run apt --fix-broken or upgrade system packages automatically." >&2
+    exit 1
+  fi
+
+  if ! simulation="$(LC_ALL=C apt-get --simulate dist-upgrade 2>&1)"; then
+    echo "ERROR: unable to verify that the operating system is fully updated." >&2
+    printf '%s\n' "$simulation" >&2
+    echo "Run 'sudo apt update' and 'sudo apt full-upgrade', then try again." >&2
+    exit 1
+  fi
+  summary="$(printf '%s\n' "$simulation" | sed -nE \
+    's/^([0-9]+) upgraded, ([0-9]+) newly installed, ([0-9]+) to remove and ([0-9]+) not upgraded\.?$/\1 \2 \3 \4/p' \
+    | tail -n 1)"
+  if [[ ! "$summary" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then
+    echo "ERROR: APT returned an unrecognized update summary." >&2
+    echo "OpenAP cannot safely confirm that the operating system is current." >&2
+    echo "Run 'sudo apt update' and 'sudo apt full-upgrade', then try again." >&2
+    exit 1
+  fi
+  read -r upgraded newly_installed removed held <<< "$summary"
+  if [ "$upgraded" -ne 0 ] || [ "$newly_installed" -ne 0 ] \
+      || [ "$removed" -ne 0 ] || [ "$held" -ne 0 ]; then
+    if [ "$allow_pending_updates" -eq 1 ]; then
+      echo "WARNING: operating-system updates are pending." >&2
+      echo "APT simulation: $upgraded upgraded, $newly_installed newly installed, $removed removed, $held not upgraded." >&2
+      echo "Continuing because --allow-pending-updates was explicitly supplied." >&2
+      echo "OpenAP will not upgrade the host operating system." >&2
+    else
+      echo "ERROR: operating-system updates are pending." >&2
+      echo "APT simulation: $upgraded upgraded, $newly_installed newly installed, $removed removed, $held not upgraded." >&2
+      echo "OpenAP does not upgrade the host operating system." >&2
+      echo "Run 'sudo apt update' and 'sudo apt full-upgrade', reboot if required, then run the installer again." >&2
+      echo "To continue without upgrading first, explicitly add --allow-pending-updates." >&2
+      exit 1
+    fi
+  fi
+
+  echo "Operating-system package state is clean and fully updated."
+}
+
+json_value() {
+  local key="$1"
+  python3 - "$key" <<'PY'
+import json
+import sys
+
+key = sys.argv[1]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+value = data
+for part in key.split("."):
+    if isinstance(value, dict):
+        value = value.get(part, "")
+    else:
+        value = ""
+print(value or "")
+PY
+}
+
+ap_candidate_count() {
+  python3 - <<'PY'
+import json
+
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+items = [
+    iface for iface in data.get("interfaces", [])
+    if iface.get("is_wireless") and iface.get("supports_ap")
+]
+print(len(items))
+PY
+}
+
+wireless_interface_count() {
+  python3 - <<'PY'
+import json
+
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+print(sum(1 for iface in data.get("interfaces", []) if iface.get("is_wireless")))
+PY
+}
+
+print_ap_candidates() {
+  python3 - "$ap_iface" <<'PY'
+import json
+import sys
+
+recommended = sys.argv[1]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+items = [
+    iface for iface in data.get("interfaces", [])
+    if iface.get("is_wireless") and iface.get("supports_ap")
+]
+for idx, iface in enumerate(items, 1):
+    name = iface.get("name", "")
+    path = iface.get("device_path", "")
+    bus = iface.get("bus", "").lower()
+    if bus == "usb" or "/usb" in path:
+        kind = "USB Wi-Fi adapter"
+    elif bus in {"pci", "pcie"} or "/pci" in path:
+        kind = "internal/PCI Wi-Fi adapter"
+    else:
+        kind = "Wi-Fi adapter"
+    bands = []
+    if iface.get("supports_24ghz"):
+        bands.append("2.4 GHz")
+    if iface.get("supports_5ghz"):
+        bands.append("5 GHz")
+    labels = []
+    if name == recommended:
+        labels.append("RECOMMENDED")
+    if iface.get("ssid"):
+        labels.append("CURRENTLY IN USE")
+    label_text = f" [{' | '.join(labels)}]" if labels else ""
+    print(f"  {idx}) {name}{label_text}")
+    if iface.get("ssid"):
+        print(f"     Status: connected as a client to Wi-Fi '{iface['ssid']}'.")
+        print("             Selecting it will disconnect that Wi-Fi connection.")
+    else:
+        print("     Status: available for the OpenAP hotspot.")
+    print(f"     Hardware: {kind}; driver {iface.get('driver') or 'unknown'}; bands {', '.join(bands) or 'unknown'}")
+    print(f"     MAC address: {iface.get('mac', '-')}")
+PY
+}
+
+ap_candidate_ssid() {
+  local requested="$1"
+  python3 - "$requested" <<'PY'
+import json
+import sys
+
+requested = sys.argv[1]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+for iface in data.get("interfaces", []):
+    if iface.get("name") == requested:
+        print(iface.get("ssid", ""))
+        break
+PY
+}
+
+explain_selected_ap() {
+  local connected_ssid
+  connected_ssid="$(ap_candidate_ssid "$ap_iface")"
+  echo
+  echo "Hotspot adapter selected: $ap_iface"
+  echo "OpenAP will use this adapter exclusively to broadcast the hotspot."
+  echo "The Ethernet-side Internet/LAN connection remains on: $ethernet_iface"
+  echo "Other Wi-Fi adapters will not be changed by the initial installation."
+  if [ -n "$connected_ssid" ]; then
+    echo "WARNING: $ap_iface is currently connected to '$connected_ssid'."
+    echo "That Wi-Fi client connection will be disconnected when the hotspot starts."
+  fi
+}
+
+ap_candidate_by_index() {
+  local index="$1"
+  python3 - "$index" <<'PY'
+import json
+import sys
+
+try:
+    index = int(sys.argv[1])
+except ValueError:
+    print("")
+    raise SystemExit(0)
+
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+items = [
+    iface for iface in data.get("interfaces", [])
+    if iface.get("is_wireless") and iface.get("supports_ap")
+]
+if 1 <= index <= len(items):
+    print(items[index - 1].get("name", ""))
+PY
+}
+
+validate_ap_override() {
+  [ -n "$ap_iface_override" ] || return 0
+  local selected
+  selected="$(python3 - "$ap_iface_override" <<'PY'
+import json
+import sys
+
+requested = sys.argv[1]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+for iface in data.get("interfaces", []):
+    if iface.get("name") == requested and iface.get("is_wireless") and iface.get("supports_ap"):
+        print(requested)
+        break
+PY
+)"
+  if [ "$selected" != "$ap_iface_override" ]; then
+    echo "ERROR: requested --ap-iface is missing or not AP-capable: $ap_iface_override" >&2
+    exit 1
+  fi
+  ap_iface="$selected"
+  echo "Selected AP interface from --ap-iface: $ap_iface"
+}
+
+select_existing_ap_interface() {
+  local profile="/etc/openap/repeater.ini"
+  local existing=""
+  local selected=""
+
+  [ -f "$profile" ] || return 1
+  existing="$(awk -F ' *= *' '$1 == "ap" {print $2; exit}' "$profile")"
+  [ -n "$existing" ] || return 1
+  selected="$(python3 - "$existing" <<'PY'
+import json
+import sys
+
+requested = sys.argv[1]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+for iface in data.get("interfaces", []):
+    if iface.get("name") == requested and iface.get("is_wireless") and iface.get("supports_ap"):
+        print(requested)
+        break
+PY
+)"
+  [ "$selected" = "$existing" ] || return 1
+  ap_iface="$selected"
+  echo
+  echo "Preserving AP interface from the existing OpenAP profile: $ap_iface"
+  explain_selected_ap
+  return 0
+}
+
+select_standby_uplink_interface() {
+  local existing=""
+  local preferred="$uplink_iface"
+
+  [ "$mode" = "ap-ethernet" ] || return 0
+  if [ -f /etc/openap/repeater.ini ]; then
+    existing="$(awk -F ' *= *' '$1 == "uplink" {print $2; exit}' /etc/openap/repeater.ini)"
+  fi
+
+  uplink_iface="$(python3 - "$ap_iface" "$existing" "$preferred" <<'PY'
+import json
+import sys
+
+ap, existing, preferred = sys.argv[1:]
+data = json.load(open("/tmp/openap-detect.json", encoding="utf-8"))
+wireless = [
+    iface.get("name", "") for iface in data.get("interfaces", [])
+    if iface.get("is_wireless") and iface.get("supports_managed") and iface.get("name") != ap
+]
+for candidate in (existing, preferred, *wireless):
+    if candidate and candidate in wireless:
+        print(candidate)
+        break
+PY
+)"
+  if [ -n "$uplink_iface" ]; then
+    echo
+    echo "Repeater Mode role assignment:"
+    echo "  AP interface:      $ap_iface"
+    echo "  Wi-Fi uplink:      $uplink_iface"
+    echo "The second adapter is recorded as the uplink for Repeater Mode."
+    echo "Repeater Mode is not activated during the standard AP-over-Ethernet install."
+  fi
+}
+
+choose_ap_interface() {
+  [ "$mode" = "ap-ethernet" ] || return 0
+  local count choice selected
+  count="$(ap_candidate_count)"
+  if [ "$count" -eq 1 ]; then
+    echo
+    echo "OpenAP found one Wi-Fi adapter capable of creating a hotspot."
+    print_ap_candidates
+    echo "It has been selected automatically."
+    explain_selected_ap
+    return 0
+  fi
+
+  if [ "$assume_yes" -eq 1 ]; then
+    echo
+    echo "OpenAP found $count Wi-Fi adapters capable of creating a hotspot."
+    print_ap_candidates
+    echo "Automatic mode (--yes) accepted the recommended adapter: $ap_iface"
+    explain_selected_ap
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "ERROR: multiple AP-capable Wi-Fi interfaces detected, but stdin is not interactive." >&2
+    echo "Re-run interactively or use --yes to accept the detected default: $ap_iface" >&2
+    exit 1
+  fi
+
+  echo
+  echo "OpenAP found $count Wi-Fi adapters capable of creating a hotspot."
+  echo
+  echo "Choose which physical Wi-Fi adapter should broadcast the OpenAP network."
+  if [ "$(wireless_interface_count)" -eq 2 ]; then
+    echo "The other Wi-Fi adapter will be recorded as the uplink for Repeater Mode."
+  fi
+  echo "A connected adapter is marked CURRENTLY IN USE: selecting it will disconnect"
+  echo "its present Wi-Fi connection. The RECOMMENDED adapter is the safe default"
+  echo "chosen by hardware detection. Press Enter to accept that recommendation."
+  echo
+  print_ap_candidates
+  while true; do
+    printf "Enter the number of the hotspot adapter [1-%s, Enter = %s]: " "$count" "$ap_iface"
+    IFS= read -r choice
+    if [ -z "$choice" ]; then
+      explain_selected_ap
+      return 0
+    fi
+    selected="$(ap_candidate_by_index "$choice")"
+    if [ -n "$selected" ]; then
+      ap_iface="$selected"
+      explain_selected_ap
+      return 0
+    fi
+    echo "Invalid choice. Enter one of the numbers shown above."
+  done
+}
+
+choose_hotspot_credentials() {
+  [ "$apply" -eq 1 ] || return 0
+  [ "$mode" = "ap-ethernet" ] || return 0
+
+  if [ -f "$hostapd_config" ]; then
+    local existing_ssid existing_password
+    existing_ssid="$(sed -n 's/^ssid=//p' "$hostapd_config" | head -n 1)"
+    existing_password="$(sed -n 's/^wpa_passphrase=//p' "$hostapd_config" | head -n 1)"
+    [ -n "$existing_ssid" ] && [ "$existing_ssid" != "-" ] && hotspot_ssid="$existing_ssid"
+    [ -n "$existing_password" ] && hotspot_password="$existing_password"
+    hotspot_credentials_preserved=1
+    echo "Existing hotspot credentials found; SSID and password will be preserved."
+    return 0
+  fi
+
+  if [ "$assume_yes" -eq 1 ]; then
+    local unattended_ssid_length
+    unattended_ssid_length="$(LC_ALL=C printf '%s' "$hotspot_ssid" | wc -c)"
+    if [ "$unattended_ssid_length" -lt 1 ] || [ "$unattended_ssid_length" -gt 32 ]; then
+      echo "ERROR: OPENAP_HOTSPOT_SSID must contain between 1 and 32 bytes." >&2
+      exit 1
+    fi
+    if [ -z "$hotspot_password" ]; then
+      if [ "$credential_tty_available" -ne 1 ]; then
+        echo "ERROR: unattended installation without a terminal requires OPENAP_HOTSPOT_PASSWORD." >&2
+        exit 1
+      fi
+      hotspot_password="$(generate_secret)"
+    fi
+    local unattended_length
+    unattended_length="$(LC_ALL=C printf '%s' "$hotspot_password" | wc -c)"
+    if [ "$unattended_length" -lt 8 ] || [ "$unattended_length" -gt 63 ]; then
+      echo "ERROR: OPENAP_HOTSPOT_PASSWORD must contain between 8 and 63 bytes." >&2
+      exit 1
+    fi
+    echo "Hotspot credentials: using a unique password for this installation."
+    echo "SSID: $hotspot_ssid; security: WPA2-Personal; the password is shown only on the terminal at the end."
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "ERROR: hotspot credentials must be chosen, but stdin is not interactive." >&2
+    echo "Re-run interactively or supply OPENAP_HOTSPOT_PASSWORD with --yes." >&2
+    exit 1
+  fi
+
+  local choice password password_again length
+  echo
+  echo "Configure the initial Wi-Fi hotspot."
+  echo "Security is WPA2-Personal with AES/CCMP."
+  while true; do
+    printf "Hotspot SSID [OpenAP]: "
+    IFS= read -r choice
+    choice="${choice:-OpenAP}"
+    length="$(LC_ALL=C printf '%s' "$choice" | wc -c)"
+    if [ "$length" -ge 1 ] && [ "$length" -le 32 ]; then
+      hotspot_ssid="$choice"
+      break
+    fi
+    echo "SSID must contain between 1 and 32 bytes."
+  done
+
+  while true; do
+    printf "Hotspot password [Enter = generate a unique password]: "
+    IFS= read -r -s password
+    echo
+    if [ -z "$password" ]; then
+      hotspot_password="$(generate_secret)"
+      echo "Generated a unique hotspot password; it will be shown once at the end."
+      break
+    fi
+    length="$(LC_ALL=C printf '%s' "$password" | wc -c)"
+    if [ "$length" -lt 8 ] || [ "$length" -gt 63 ]; then
+      echo "A WPA2 password must contain between 8 and 63 bytes."
+      continue
+    fi
+    printf "Repeat hotspot password: "
+    IFS= read -r -s password_again
+    echo
+    if [ "$password" = "$password_again" ]; then
+      hotspot_password="$password"
+      break
+    fi
+    echo "Passwords do not match. Try again."
+  done
+}
+
+choose_admin_credentials() {
+  [ "$apply" -eq 1 ] || return 0
+
+  if [ -f /etc/openap/openap.auth ]; then
+    if ! openap_auth_file_is_valid /etc/openap/openap.auth; then
+      echo "ERROR: /etc/openap/openap.auth is invalid; refusing to preserve unusable administrator credentials." >&2
+      exit 1
+    fi
+    admin_user="$(sed -n '1p' /etc/openap/openap.auth)"
+    admin_credentials_preserved=1
+    echo "Existing admin credentials found; they will be preserved."
+    return 0
+  fi
+
+  if [ "$assume_yes" -eq 1 ]; then
+    case "$admin_user" in
+      ''|*[!A-Za-z0-9._-]*)
+        echo "ERROR: OPENAP_ADMIN_USERNAME contains unsupported characters." >&2
+        exit 1
+        ;;
+    esac
+    if [ -z "$admin_password" ]; then
+      if [ "$credential_tty_available" -ne 1 ]; then
+        echo "ERROR: unattended installation without a terminal requires OPENAP_ADMIN_PASSWORD." >&2
+        exit 1
+      fi
+      admin_password="$(generate_secret)"
+    fi
+    local unattended_length
+    unattended_length="$(LC_ALL=C printf '%s' "$admin_password" | wc -c)"
+    if [ "$unattended_length" -lt 12 ] || [ "$unattended_length" -gt 128 ]; then
+      echo "ERROR: OPENAP_ADMIN_PASSWORD must contain between 12 and 128 bytes." >&2
+      exit 1
+    fi
+    echo "Admin credentials: using username admin with a unique password."
+    echo "The password is shown only on the terminal at the end."
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "ERROR: admin credentials must be chosen, but stdin is not interactive." >&2
+    echo "Re-run interactively or supply OPENAP_ADMIN_PASSWORD with --yes." >&2
+    exit 1
+  fi
+
+  local choice password password_again length
+  echo
+  echo "Configure OpenAP web administrator credentials."
+  while true; do
+    printf "Admin username [admin]: "
+    IFS= read -r choice
+    choice="${choice:-admin}"
+    case "$choice" in
+      *[!A-Za-z0-9._-]*)
+        echo "Username may contain only letters, numbers, dot, underscore and hyphen."
+        ;;
+      *)
+        admin_user="$choice"
+        break
+        ;;
+    esac
+  done
+
+  while true; do
+    printf "Admin password [Enter = generate a unique password]: "
+    IFS= read -r -s password
+    echo
+    if [ -z "$password" ]; then
+      admin_password="$(generate_secret)"
+      echo "Generated a unique admin password; it will be shown once at the end."
+      break
+    fi
+    length="$(LC_ALL=C printf '%s' "$password" | wc -c)"
+    if [ "$length" -lt 12 ] || [ "$length" -gt 128 ]; then
+      echo "An admin password must contain between 12 and 128 bytes."
+      continue
+    fi
+    printf "Repeat admin password: "
+    IFS= read -r -s password_again
+    echo
+    if [ "$password" = "$password_again" ]; then
+      admin_password="$password"
+      break
+    fi
+    echo "Passwords do not match. Try again."
+  done
+}
+
+iface_mac() {
+  local iface="$1"
+  [ -n "$iface" ] && [ -r "/sys/class/net/$iface/address" ] && cat "/sys/class/net/$iface/address" || true
+}
+
+require_any_wifi_before_packages() {
+  [ "$mode" = "ap-ethernet" ] || return 0
+  local iface
+  for iface in /sys/class/net/*; do
+    [ -d "$iface/wireless" ] && return 0
+  done
+  echo "ERROR: no Wi-Fi interface was detected." >&2
+  echo "OpenAP does not install Wi-Fi firmware or repair driver setup." >&2
+  echo "Install the hardware firmware/driver first and verify that the intended Wi-Fi interfaces are visible, then re-run the installer." >&2
+  exit 1
+}
+
+port53_available_on_ap() {
+  python3 - <<'PY'
+import socket
+
+address = "10.88.77.1"
+sockets = []
+try:
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind((address, 53))
+    sockets.append(tcp)
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind((address, 53))
+    sockets.append(udp)
+except OSError:
+    raise SystemExit(1)
+finally:
+    for sock in sockets:
+        sock.close()
+PY
+}
+
+configure_dnsmasq() {
+  local selected_mode="$1"
+  local dns_iface="$ap_iface"
+  [ "$raspberry_native" -eq 1 ] || dns_iface=openap0
+  if [ "$selected_mode" = "local" ]; then
+    cat > /etc/dnsmasq.d/openap-repeater.conf <<EOF
+# Managed by OpenAP universal installer
+interface=$dns_iface
+bind-interfaces
+listen-address=10.88.77.1
+dhcp-authoritative
+dhcp-range=10.88.77.50,10.88.77.200,255.255.255.0,12h
+dhcp-option=3,10.88.77.1
+dhcp-option=6,10.88.77.1
+server=1.1.1.1
+server=1.0.0.1
+no-resolv
+domain-needed
+bogus-priv
+EOF
+  else
+    cat > /etc/dnsmasq.d/openap-repeater.conf <<EOF
+# Managed by OpenAP universal installer
+interface=$dns_iface
+bind-interfaces
+port=0
+dhcp-authoritative
+dhcp-range=10.88.77.50,10.88.77.200,255.255.255.0,12h
+dhcp-option=3,10.88.77.1
+dhcp-option=6,1.1.1.1,1.0.0.1
+EOF
+  fi
+}
+
+print_install_summary() {
+  local lan_ip=""
+  if [ -n "$ethernet_iface" ] && [ -d "/sys/class/net/$ethernet_iface" ]; then
+    lan_ip="$(ip -4 -o addr show dev "$ethernet_iface" 2>/dev/null | awk 'NR == 1 { split($4, address, "/"); print address[1] }')"
+  fi
+
+  echo
+  echo "============================================================"
+  echo " OpenAP installation summary"
+  echo "============================================================"
+  echo "Installation:         AP over Ethernet"
+  if [ "$mode" = "ap-ethernet" ]; then
+    echo "Wireless country:     $wireless_country"
+  fi
+  echo "Ethernet uplink:      ${ethernet_iface:-not assigned}"
+  echo "Physical Ethernet:    ${ethernet_physical_iface:-not assigned}"
+  echo "AP interface:         ${ap_iface:-not assigned}"
+  if [ "$mode" = "ap-ethernet" ]; then
+    echo "Hotspot SSID:         $hotspot_ssid"
+    echo "Hotspot security:     WPA2-Personal (WPA2-PSK, AES/CCMP)"
+    echo "Hotspot gateway/UI:   http://10.88.77.1/"
+    echo "DNS mode:             ${dns_mode_selected:-$dns_mode}"
+  fi
+  if [ -n "$lan_ip" ]; then
+    echo "LAN web interface:    http://$lan_ip/"
+  else
+    echo "LAN web interface:    use the IPv4 address of $ethernet_iface"
+  fi
+  echo "Web admin username:   $admin_user"
+  if [ "$admin_credentials_preserved" -eq 1 ]; then
+    echo "Web admin password:   existing password preserved"
+  else
+    echo "Web admin password:   shown privately on the terminal below"
+  fi
+  if [ "$mode" = "ap-ethernet" ]; then
+    if [ "$hotspot_credentials_preserved" -eq 1 ]; then
+      echo "Hotspot password:     existing password preserved"
+    else
+      echo "Hotspot password:     shown privately on the terminal below"
+    fi
+  fi
+  echo "Installer log:        /var/log/openap-installer.log"
+  echo "Backup directory:     $backup_dir"
+  echo "============================================================"
+
+  if [ "$credential_tty_available" -eq 1 ]; then
+    {
+      echo
+      echo "OpenAP private credential recap (not written to installer log)"
+      if [ "$mode" = "ap-ethernet" ]; then
+        if [ "$hotspot_credentials_preserved" -eq 1 ]; then
+          printf 'Hotspot: %s / [existing password preserved]\n' "$hotspot_ssid"
+        else
+          printf 'Hotspot: %s / %s\n' "$hotspot_ssid" "$hotspot_password"
+        fi
+      fi
+      if [ "$admin_credentials_preserved" -eq 1 ]; then
+        printf 'Web login: %s / [existing password preserved]\n' "$admin_user"
+      else
+        printf 'Web login: %s / %s\n' "$admin_user" "$admin_password"
+      fi
+    } >&3
+  else
+    echo "Private passwords were not printed because no interactive terminal is available."
+  fi
+}
+
+validate_role_preflight() {
+  case "$mode" in
+    ap-ethernet)
+      [ -n "$ap_iface" ] || {
+        echo "ERROR: no Wi-Fi interface capable of AP/hotspot mode was detected." >&2
+        echo "Attach a supported Wi-Fi adapter and re-run the installer." >&2
+        exit 1
+      }
+      [ -n "$ethernet_iface" ] || {
+        echo "ERROR: no Ethernet interface was detected for the standard install." >&2
+        echo "Attach/configure Ethernet or use an explicit advanced mode later." >&2
+        exit 1
+      }
+      ;;
+  esac
+}
+
+if [ "$apply" -eq 0 ]; then
+  echo "Dry-run mode. Re-run with --apply to install."
+elif [ "$(id -u)" -ne 0 ]; then
+  echo "Apply mode must be run as root, for example: sudo $0 --apply --yes" >&2
+  exit 1
+fi
+
+if [ "$apply" -eq 1 ]; then
+  mkdir -p /var/log
+  exec > >(tee -a /var/log/openap-installer.log) 2>&1
+  echo "OpenAP installer started: $(date --iso-8601=seconds)"
+fi
+
+show_welcome
+confirm_welcome
+
+if ! os_supported; then
+  echo "This stage supports Debian/Ubuntu-like systems only." >&2
+  exit 1
+fi
+
+platform_update_preflight
+
+for file in \
+  "$detector" \
+  "$version_file" \
+  "$repo_dir/openap-installer/config/50-openap-router.conf" \
+  "$repo_dir/openap-installer/config/20-openap-wait-ap-address.conf" \
+  "$repo_dir/openap-installer/config/99-openap-networkd-wait-online.conf" \
+  "$repo_dir/openap-installer/config/99-openap-networkmanager-wait-online.conf" \
+  "$repo_dir/installers/openap-networkd-wait-online" \
+  "$webroot_excludes" \
+  "$repo_dir/templates/aptv_about.php" \
+  "$repo_dir/config/config.repeater.php" \
+  "$repo_dir/config/defaults.json" \
+  "$repo_dir/installers/debuglog.sh" \
+  "$repo_dir/installers/raspap.repeater.sudoers" \
+  "$repo_dir/installers/openap.txpower.sudoers" \
+  "$repo_dir/installers/openap-apply-ap-ethernet.sh" \
+  "$network_migration_helper" \
+  "$repo_dir/installers/openap-apply-ap-ethernet-bridge.sh" \
+  "$repo_dir/installers/openap-apply-ap-ethernet-bridge-ifupdown.sh" \
+  "$repo_dir/installers/openap-apply-ap-ethernet-bridge-networkd.sh" \
+  "$repo_dir/installers/openap-attach-ap-bridge.sh" \
+  "$repo_dir/installers/45-openap-ap-bridge.conf" \
+  "$repo_dir/installers/openap-apply-dhcp-settings.sh" \
+  "$repo_dir/installers/openap-apply-encrypted-dns.sh" \
+  "$repo_dir/installers/openap-reset-ap-radio.sh" \
+  "$repo_dir/installers/openap-apply-repeater-wifi.sh" \
+  "$repo_dir/installers/openap-switch-interface-roles.sh" \
+  "$repo_dir/installers/openap-allow-ssh.sh" \
+  "$repo_dir/installers/openap-ssh-access.service" \
+  "$dual_hostapd_generator" \
+  "$dual_hostapd_applier" \
+  "$repo_dir/installers/openap-apply-uplink-wifi.sh" \
+  "$repo_dir/installers/openap-scan-wifi.sh" \
+  "$repo_dir/installers/openap-forget-uplink-wifi.sh" \
+  "$repo_dir/installers/openap-resolve-interfaces.sh" \
+  "$repo_dir/installers/openap-set-txpower.sh" \
+  "$repo_dir/installers/openap-system-reboot.sh" \
+  "$repo_dir/installers/openap-routed-service-required.sh" \
+  "$repo_dir/installers/openap-wait-ap-address.sh" \
+  "$repo_dir/openap-installer/config/25-openap-dnsmasq-mode.conf" \
+  "$repo_dir/openap-installer/config/25-openap-firewall-mode.conf" \
+  "$repo_dir/installers/openap-refresh-bridge-neighbors.sh" \
+  "$repo_dir/installers/openap-uplink-watchdog.sh" \
+  "$repo_dir/installers/openap-uplink-watchdog.service" \
+  "$repo_dir/installers/openap-uplink-watchdog.timer" \
+  "$repo_dir/installers/openap-bridge-neighbors.service" \
+  "$repo_dir/installers/openap-bridge-neighbors.timer"; do
+  require_file "$file"
+done
+
+if [ "$component_profile" = "both" ]; then
+  require_file "$repo_dir/openap-installer/bin/openap-iptv-install"
+fi
+
+openap_version="$(tr -d '\r\n' < "$version_file")"
+if [[ ! "$openap_version" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$ ]]; then
+  echo "ERROR: invalid OpenAP version in $version_file" >&2
+  exit 1
+fi
+openap_revision="$(git -C "$repo_dir" rev-parse --short=8 HEAD 2>/dev/null || true)"
+
+migrate_legacy_config_tree
+
+apt_yes=()
+if [ "$assume_yes" -eq 1 ]; then
+  apt_yes=(-y)
+fi
+
+packages=(
+  ca-certificates
+  curl
+  git
+  rsync
+  sudo
+  iproute2
+  iputils-ping
+  bridge-utils
+  python3
+  iw
+  usbutils
+  usb-modeswitch
+  usb-modeswitch-data
+  wireless-regdb
+  rfkill
+  wpasupplicant
+  hostapd
+  dnsmasq
+  dnscrypt-proxy
+  nftables
+  lighttpd
+  php-cgi
+  php-cli
+  php-curl
+  php-intl
+  php-mbstring
+  php-sqlite3
+  php-xml
+  php-zip
+  jq
+  qrencode
+)
+
+echo "Repository: $repo_dir"
+echo "Webroot:    $webroot"
+echo "Components: $component_profile"
+echo "Installation: AP over Ethernet"
+echo "DNS mode:   $dns_mode"
+
+echo
+echo "Minimal hardware preflight"
+if [ "$apply" -eq 1 ]; then
+  require_any_wifi_before_packages
+else
+  echo "DRY-RUN: require preconfigured, visible Wi-Fi interfaces; do not install firmware or drivers"
+fi
+
+prepare_network_migration
+
+echo
+echo "Package install set"
+capture_service_state
+inhibit_package_service_starts
+trap installer_exit_cleanup EXIT
+run apt-get install "${apt_yes[@]}" --no-install-recommends --no-upgrade "${packages[@]}"
+run apt-get check
+release_package_start_policy
+if [ "$apply" -eq 1 ]; then
+  if [ "$network_migration_consent" -eq 1 ]; then
+    echo "Migrating the active ifupdown configuration to systemd-networkd"
+    run bash "$network_migration_helper" --apply
+  else
+    echo "No ifupdown network migration was requested."
+  fi
+else
+  run bash "$network_migration_helper" --validate-only
+fi
+disable_new_dnscrypt_services
+if [ "$apply" -eq 1 ] && [ "$wireless_regdb_missing" -eq 1 ] \
+  && dpkg-query -W -f='${db:Status-Abbrev}' wireless-regdb 2>/dev/null | grep -q '^ii '; then
+  reboot_required=1
+fi
+
+echo
+echo "Run OpenAP preflight detector"
+if [ "$apply" -eq 1 ]; then
+  "$detector" --json > /tmp/openap-detect.json
+  "$detector"
+else
+  echo "DRY-RUN: $detector --json > /tmp/openap-detect.json"
+fi
+
+ap_iface=""
+uplink_iface=""
+ethernet_iface=""
+ethernet_physical_iface=""
+ethernet_addr_cidr=""
+ethernet_gateway=""
+ethernet_dns=""
+ethernet_dns_lines=""
+if [ "$apply" -eq 1 ]; then
+  ap_iface="$(json_value proposed_roles.ap)"
+  uplink_iface="$(json_value proposed_roles.uplink)"
+  ethernet_iface="$(json_value proposed_roles.ethernet)"
+  ethernet_physical_iface="$(json_value proposed_roles.ethernet_physical)"
+  # Preserve an already configured Ethernet management address.  Replacing a
+  # static uplink with DHCP during AP activation changes the host address and
+  # can make the installer session and SSH management path disappear.
+  if [ -n "$ethernet_iface" ]; then
+    ethernet_addr_cidr="$(ip -4 -o addr show dev "$ethernet_iface" scope global | awk 'NR == 1 {print $4}')"
+    ethernet_gateway="$(ip -4 route show default dev "$ethernet_iface" | awk '$1 == "default" {for (i = 1; i <= NF; i++) if ($i == "via") {print $(i + 1); exit}}')"
+    ethernet_dns="$(nmcli -g IP4.DNS device show "$ethernet_iface" 2>/dev/null | sed '/^[[:space:]]*$/d' | paste -sd, - || true)"
+    if [ -z "$ethernet_dns" ] && [ -r /etc/resolv.conf ]; then
+      ethernet_dns="$(awk '$1 == "nameserver" {print $2}' /etc/resolv.conf | paste -sd, -)"
+    fi
+    ethernet_dns="$(printf '%s\n' "$ethernet_dns" | tr ', ' '\n' | awk -v excluded="$ethernet_gateway" '
+      $0 ~ /^[0-9]+(\.[0-9]+){3}$/ && $0 != excluded && $0 !~ /^127\./ && !seen[$0]++ {
+        printf "%s%s", sep, $0
+        sep = ","
+      }
+    ')"
+    [ -n "$ethernet_dns" ] || ethernet_dns='1.1.1.1,1.0.0.1'
+    ethernet_dns_lines="$(printf '%s\n' "$ethernet_dns" | tr ',' '\n' | sed '/^[[:space:]]*$/d; s/^/DNS=/')"
+  fi
+else
+  ap_iface="<detected-ap>"
+  uplink_iface="<detected-uplink>"
+  ethernet_iface="<detected-ethernet>"
+  ethernet_physical_iface="<detected-physical-ethernet>"
+fi
+
+if [ "$apply" -eq 1 ]; then
+  if [ -r /etc/openap/repeater.ini ]; then
+    previous_ap_iface="$(awk -F ' *= *' '$1 == "ap" {print $2; exit}' /etc/openap/repeater.ini)"
+    previous_ap_gateway="$(awk -F ' *= *' '$1 == "gateway" {print $2; exit}' /etc/openap/repeater.ini)"
+  fi
+  validate_role_preflight
+  validate_ap_override
+  if [ -z "$ap_iface_override" ]; then
+    if ! select_existing_ap_interface; then
+      choose_ap_interface
+    elif [ "$assume_yes" -eq 0 ] \
+      && [ "$(wireless_interface_count)" -eq 2 ] \
+      && [ "$(ap_candidate_count)" -eq 2 ]; then
+      echo "Interactive installation with two usable Wi-Fi adapters detected."
+      echo "Confirm which adapter will be the AP; the other will become the Repeater Mode uplink."
+      choose_ap_interface
+    fi
+  fi
+  select_standby_uplink_interface
+  choose_wireless_country
+  choose_hotspot_credentials
+  choose_admin_credentials
+else
+  echo "DRY-RUN: validate at least one AP-capable Wi-Fi and one Ethernet for ap-ethernet"
+  echo "DRY-RUN: ask which AP-capable Wi-Fi to use if more than one is detected"
+  if [ "$mode" = "ap-ethernet" ]; then
+    echo "DRY-RUN: ask for the wireless regulatory country or accept a valid detected country"
+    echo "DRY-RUN: ask for hotspot SSID/password with WPA2-Personal AES/CCMP"
+  fi
+  echo "DRY-RUN: ask for OpenAP admin credentials or generate unique passwords with --yes"
+fi
+
+echo
+echo "Backup existing state"
+backup_dir="/root/openap-universal-preinstall-$(date +%Y%m%d-%H%M%S)"
+run mkdir -p "$backup_dir"
+for path in \
+  /etc/hostapd/hostapd.conf \
+  /etc/dnsmasq.d/openap-repeater.conf \
+  /etc/systemd/system/openap-regdomain.service \
+  /etc/systemd/system/openap-uplink.service \
+  /etc/systemd/system/openap-ssh-access.service \
+  /etc/nftables.conf \
+  /etc/openap/repeater.ini \
+  /etc/openap/wifi-roles.ini \
+  /etc/openap/openap.auth \
+  /etc/sudoers.d/090_raspap \
+  "/etc/sudoers.d/$sudoers_name" \
+  "$webroot/includes/config.php"; do
+  copy_if_exists "$path" "$backup_dir/"
+done
+if [ -d /etc/systemd/network ]; then
+  run mkdir -p "$backup_dir/systemd-network"
+  if [ "$apply" -eq 1 ]; then
+    cp -a /etc/systemd/network/* "$backup_dir/systemd-network/" 2>/dev/null || true
+  else
+    echo "DRY-RUN: copy /etc/systemd/network/* $backup_dir/systemd-network/"
+  fi
+fi
+if [ -d /etc/wpa_supplicant ]; then
+  run mkdir -p "$backup_dir/wpa_supplicant"
+  if [ "$apply" -eq 1 ]; then
+    cp -a /etc/wpa_supplicant/* "$backup_dir/wpa_supplicant/" 2>/dev/null || true
+  else
+    echo "DRY-RUN: copy /etc/wpa_supplicant/* $backup_dir/wpa_supplicant/"
+  fi
+fi
+openap_backup_prune /root openap-universal-preinstall
+
+echo
+echo "Install web UI"
+run mkdir -p "$webroot"
+run rsync -a --exclude .git --exclude-from="$webroot_excludes" "$repo_dir"/ "$webroot"/
+run cp "$ui_config" "$webroot/includes/config.php"
+run chown -R www-data:www-data "$webroot"
+
+echo
+echo "Install runtime directories"
+run mkdir -p /etc/openap/backups /etc/openap/components /etc/openap/hostapd /etc/openap/networking /etc/openap/system /etc/openap/user-preferences /var/cache/openap/detect
+if [ "$apply" -eq 1 ]; then
+  {
+    printf 'version=%s\n' "$openap_version"
+    if [ -n "$openap_revision" ]; then
+      printf 'revision=%s\n' "$openap_revision"
+    fi
+  } > "$release_file"
+  profile_value="$component_profile"
+  [ "$component_profile" = "both" ] && profile_value="openap"
+  profile_tmp="/etc/openap/components/profile.tmp.$$"
+  printf '%s\n' "$profile_value" > "$profile_tmp"
+  chown root:root "$profile_tmp"
+  chmod 0644 "$profile_tmp"
+  mv -f "$profile_tmp" /etc/openap/components/profile
+else
+  echo "DRY-RUN: write OpenAP version metadata to $release_file"
+  echo "DRY-RUN: write component profile $([ "$component_profile" = "both" ] && echo openap || echo "$component_profile") to /etc/openap/components/profile"
+fi
+run cp "$repo_dir/config/defaults.json" /etc/openap/networking/defaults.json
+run cp "$repo_dir/installers/debuglog.sh" /etc/openap/system/debuglog.sh
+run chown -R www-data:www-data /etc/openap
+run chown -R www-data:www-data /var/cache/openap
+persist_service_state
+run chmod 0644 "$release_file"
+run chown root:root /etc/openap/system/debuglog.sh
+run chmod 0750 /etc/openap/system/debuglog.sh
+
+echo
+echo "Install OpenAP helpers"
+echo "Install component manager runtime"
+run install -d -o root -g root -m 0755 "$component_runtime_source"
+if [ "$repo_dir" != "$component_runtime_source" ]; then
+  run rsync -a \
+    --exclude .git \
+    --exclude './tmp' \
+    --exclude '*/__pycache__' \
+    --exclude '*.pyc' \
+    --exclude '*.before-*' \
+    "$repo_dir"/ "$component_runtime_source"/
+fi
+run chown -R root:root "$component_runtime_dir"
+run cp "$repo_dir/installers/openap-component-manager" /usr/local/sbin/openap-component-manager
+run chown root:root /usr/local/sbin/openap-component-manager
+run chmod 0755 /usr/local/sbin/openap-component-manager
+run install -d -o root -g www-data -m 0770 /var/lib/openap-component-manager/requests
+
+run cp "$repo_dir/installers/openap-apply-ap-ethernet.sh" /usr/local/sbin/openap-apply-ap-ethernet
+run cp "$network_migration_helper" /usr/local/sbin/openap-migrate-ifupdown-networkd
+run cp "$repo_dir/installers/openap-apply-ap-ethernet-bridge.sh" /usr/local/sbin/openap-apply-ap-ethernet-bridge
+run cp "$repo_dir/installers/openap-apply-ap-ethernet-bridge-ifupdown.sh" /usr/local/sbin/openap-apply-ap-ethernet-bridge-ifupdown
+run cp "$repo_dir/installers/openap-apply-ap-ethernet-bridge-networkd.sh" /usr/local/sbin/openap-apply-ap-ethernet-bridge-networkd
+run cp "$repo_dir/installers/openap-attach-ap-bridge.sh" /usr/local/sbin/openap-attach-ap-bridge
+run cp "$repo_dir/installers/openap-apply-dhcp-settings.sh" /usr/local/sbin/openap-apply-dhcp-settings
+run cp "$repo_dir/installers/openap-apply-encrypted-dns.sh" /usr/local/sbin/openap-apply-encrypted-dns
+run cp "$repo_dir/installers/openap-reset-ap-radio.sh" /usr/local/sbin/openap-reset-ap-radio
+run cp "$repo_dir/installers/openap-apply-repeater-wifi.sh" /usr/local/sbin/openap-apply-repeater-wifi
+run cp "$repo_dir/installers/openap-apply-uplink-wifi.sh" /usr/local/sbin/openap-apply-uplink-wifi
+run cp "$repo_dir/installers/openap-scan-wifi.sh" /usr/local/sbin/openap-scan-wifi
+run cp "$repo_dir/installers/openap-forget-uplink-wifi.sh" /usr/local/sbin/openap-forget-uplink-wifi
+run cp "$repo_dir/installers/openap-resolve-interfaces.sh" /usr/local/sbin/openap-resolve-interfaces
+run cp "$repo_dir/installers/openap-set-txpower.sh" /usr/local/sbin/openap-set-txpower
+run cp "$repo_dir/installers/openap-system-reboot.sh" /usr/local/sbin/openap-system-reboot
+run cp "$repo_dir/installers/openap-networkd-wait-online" /usr/local/sbin/openap-networkd-wait-online
+run rm -f /usr/local/sbin/openap-dnsmasq-required
+run cp "$repo_dir/installers/openap-routed-service-required.sh" /usr/local/sbin/openap-routed-service-required
+run cp "$repo_dir/installers/openap-wait-ap-address.sh" /usr/local/sbin/openap-wait-ap-address
+run cp "$repo_dir/installers/openap-prepare-ap-interface.sh" /usr/local/sbin/openap-prepare-ap-interface
+run cp "$repo_dir/installers/openap-refresh-bridge-neighbors.sh" /usr/local/sbin/openap-refresh-bridge-neighbors
+run cp "$repo_dir/installers/openap-uplink-watchdog.sh" /usr/local/sbin/openap-uplink-watchdog
+run cp "$repo_dir/installers/openap-switch-interface-roles.sh" /usr/local/sbin/openap-switch-interface-roles
+run cp "$repo_dir/installers/openap-allow-ssh.sh" /usr/local/sbin/openap-allow-ssh
+run cp "$detector" /usr/local/sbin/openap-detect
+run cp "$dual_hostapd_generator" /usr/local/sbin/openap-generate-dual-hostapd
+run cp "$dual_hostapd_applier" /usr/local/sbin/openap-apply-dual-hostapd
+run chown root:root /usr/local/sbin/openap-apply-ap-ethernet /usr/local/sbin/openap-migrate-ifupdown-networkd /usr/local/sbin/openap-apply-ap-ethernet-bridge /usr/local/sbin/openap-apply-ap-ethernet-bridge-ifupdown /usr/local/sbin/openap-apply-ap-ethernet-bridge-networkd /usr/local/sbin/openap-attach-ap-bridge /usr/local/sbin/openap-apply-dhcp-settings /usr/local/sbin/openap-apply-encrypted-dns /usr/local/sbin/openap-reset-ap-radio /usr/local/sbin/openap-apply-repeater-wifi /usr/local/sbin/openap-apply-uplink-wifi /usr/local/sbin/openap-scan-wifi /usr/local/sbin/openap-forget-uplink-wifi /usr/local/sbin/openap-resolve-interfaces /usr/local/sbin/openap-set-txpower /usr/local/sbin/openap-system-reboot /usr/local/sbin/openap-networkd-wait-online /usr/local/sbin/openap-routed-service-required /usr/local/sbin/openap-wait-ap-address /usr/local/sbin/openap-prepare-ap-interface /usr/local/sbin/openap-refresh-bridge-neighbors /usr/local/sbin/openap-uplink-watchdog /usr/local/sbin/openap-switch-interface-roles /usr/local/sbin/openap-detect /usr/local/sbin/openap-generate-dual-hostapd /usr/local/sbin/openap-apply-dual-hostapd
+run chmod 0755 /usr/local/sbin/openap-apply-ap-ethernet /usr/local/sbin/openap-migrate-ifupdown-networkd /usr/local/sbin/openap-apply-ap-ethernet-bridge /usr/local/sbin/openap-apply-ap-ethernet-bridge-ifupdown /usr/local/sbin/openap-apply-ap-ethernet-bridge-networkd /usr/local/sbin/openap-attach-ap-bridge /usr/local/sbin/openap-apply-dhcp-settings /usr/local/sbin/openap-apply-encrypted-dns /usr/local/sbin/openap-reset-ap-radio /usr/local/sbin/openap-apply-repeater-wifi /usr/local/sbin/openap-apply-uplink-wifi /usr/local/sbin/openap-scan-wifi /usr/local/sbin/openap-forget-uplink-wifi /usr/local/sbin/openap-resolve-interfaces /usr/local/sbin/openap-set-txpower /usr/local/sbin/openap-system-reboot /usr/local/sbin/openap-networkd-wait-online /usr/local/sbin/openap-routed-service-required /usr/local/sbin/openap-wait-ap-address /usr/local/sbin/openap-prepare-ap-interface /usr/local/sbin/openap-refresh-bridge-neighbors /usr/local/sbin/openap-uplink-watchdog /usr/local/sbin/openap-switch-interface-roles /usr/local/sbin/openap-detect /usr/local/sbin/openap-generate-dual-hostapd /usr/local/sbin/openap-apply-dual-hostapd
+run chown root:root /usr/local/sbin/openap-allow-ssh
+run chmod 0755 /usr/local/sbin/openap-allow-ssh
+
+echo
+echo "Install AP-Ethernet bridge neighbour refresh timer"
+run cp "$repo_dir/installers/openap-bridge-neighbors.service" /etc/systemd/system/openap-bridge-neighbors.service
+run cp "$repo_dir/installers/openap-bridge-neighbors.timer" /etc/systemd/system/openap-bridge-neighbors.timer
+run chown root:root /etc/systemd/system/openap-bridge-neighbors.service /etc/systemd/system/openap-bridge-neighbors.timer
+run chmod 0644 /etc/systemd/system/openap-bridge-neighbors.service /etc/systemd/system/openap-bridge-neighbors.timer
+run systemctl daemon-reload
+run systemctl enable openap-bridge-neighbors.timer
+
+echo
+echo "Install SSH management access"
+run cp "$repo_dir/installers/openap-ssh-access.service" /etc/systemd/system/openap-ssh-access.service
+run chown root:root /etc/systemd/system/openap-ssh-access.service
+run chmod 0644 /etc/systemd/system/openap-ssh-access.service
+run systemctl daemon-reload
+run systemctl enable --now openap-ssh-access.service
+
+echo
+echo "Install repeater uplink watchdog timer"
+run cp "$repo_dir/installers/openap-uplink-watchdog.service" /etc/systemd/system/openap-uplink-watchdog.service
+run cp "$repo_dir/installers/openap-uplink-watchdog.timer" /etc/systemd/system/openap-uplink-watchdog.timer
+run chown root:root /etc/systemd/system/openap-uplink-watchdog.service /etc/systemd/system/openap-uplink-watchdog.timer
+run chmod 0644 /etc/systemd/system/openap-uplink-watchdog.service /etc/systemd/system/openap-uplink-watchdog.timer
+run systemctl daemon-reload
+run systemctl enable --now openap-uplink-watchdog.timer
+
+echo
+echo "Install universal systemd-networkd wait-online policy"
+run mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
+run cp "$repo_dir/openap-installer/config/99-openap-networkd-wait-online.conf" /etc/systemd/system/systemd-networkd-wait-online.service.d/99-openap-networkd-wait-online.conf
+run chown root:root /etc/systemd/system/systemd-networkd-wait-online.service.d/99-openap-networkd-wait-online.conf
+run chmod 0644 /etc/systemd/system/systemd-networkd-wait-online.service.d/99-openap-networkd-wait-online.conf
+
+echo "Install OpenAP NetworkManager wait-online policy"
+run mkdir -p /etc/systemd/system/NetworkManager-wait-online.service.d
+run cp "$repo_dir/openap-installer/config/99-openap-networkmanager-wait-online.conf" /etc/systemd/system/NetworkManager-wait-online.service.d/99-openap-networkmanager-wait-online.conf
+run chown root:root /etc/systemd/system/NetworkManager-wait-online.service.d/99-openap-networkmanager-wait-online.conf
+run chmod 0644 /etc/systemd/system/NetworkManager-wait-online.service.d/99-openap-networkmanager-wait-online.conf
+
+echo "Install AP-address startup ordering"
+run mkdir -p /etc/systemd/system/dnsmasq.service.d /etc/systemd/system/hostapd.service.d
+run cp "$repo_dir/installers/45-openap-ap-bridge.conf" /etc/systemd/system/hostapd.service.d/45-openap-ap-bridge.conf
+run chown root:root /etc/systemd/system/hostapd.service.d/45-openap-ap-bridge.conf
+run chmod 0644 /etc/systemd/system/hostapd.service.d/45-openap-ap-bridge.conf
+run cp "$repo_dir/openap-installer/config/25-openap-dnsmasq-mode.conf" /etc/systemd/system/dnsmasq.service.d/25-openap-dnsmasq-mode.conf
+run chown root:root /etc/systemd/system/dnsmasq.service.d/25-openap-dnsmasq-mode.conf
+run chmod 0644 /etc/systemd/system/dnsmasq.service.d/25-openap-dnsmasq-mode.conf
+run mkdir -p /etc/systemd/system/openap-firewall.service.d
+run cp "$repo_dir/openap-installer/config/25-openap-firewall-mode.conf" /etc/systemd/system/openap-firewall.service.d/25-openap-firewall-mode.conf
+run chown root:root /etc/systemd/system/openap-firewall.service.d/25-openap-firewall-mode.conf
+run chmod 0644 /etc/systemd/system/openap-firewall.service.d/25-openap-firewall-mode.conf
+if [ "$raspberry_native" -eq 1 ]; then
+  run rm -f /etc/systemd/system/dnsmasq.service.d/20-openap-wait-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-wait-ap-address.conf
+  run cp "$repo_dir/installers/openap-ap-address.service" /etc/systemd/system/openap-ap-address.service
+  run cp "$repo_dir/installers/20-openap-ap-address.conf" /etc/systemd/system/dnsmasq.service.d/20-openap-ap-address.conf
+  run cp "$repo_dir/installers/20-openap-hostapd-address.conf" /etc/systemd/system/hostapd.service.d/20-openap-ap-address.conf
+  run cp "$repo_dir/installers/30-openap-hostapd-config.conf" /etc/systemd/system/hostapd.service.d/30-openap-hostapd-config.conf
+  run chown root:root /etc/systemd/system/openap-ap-address.service /etc/systemd/system/dnsmasq.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/30-openap-hostapd-config.conf
+  run chmod 0644 /etc/systemd/system/openap-ap-address.service /etc/systemd/system/dnsmasq.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/30-openap-hostapd-config.conf
+else
+  run rm -f /etc/systemd/system/dnsmasq.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-ap-address.conf /etc/systemd/system/hostapd.service.d/30-openap-hostapd-config.conf
+  run cp "$repo_dir/openap-installer/config/20-openap-wait-ap-address.conf" /etc/systemd/system/dnsmasq.service.d/20-openap-wait-ap-address.conf
+  run cp "$repo_dir/openap-installer/config/20-openap-wait-ap-address.conf" /etc/systemd/system/hostapd.service.d/20-openap-wait-ap-address.conf
+  run chown root:root /etc/systemd/system/dnsmasq.service.d/20-openap-wait-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-wait-ap-address.conf
+  run chmod 0644 /etc/systemd/system/dnsmasq.service.d/20-openap-wait-ap-address.conf /etc/systemd/system/hostapd.service.d/20-openap-wait-ap-address.conf
+fi
+
+echo
+echo "Install sudoers"
+run cp "$repo_dir/installers/raspap.repeater.sudoers" "/etc/sudoers.d/$sudoers_name"
+if [ "$apply" -eq 1 ]; then
+  append_wifi_sudoers_rules "/etc/sudoers.d/$sudoers_name"
+else
+  echo "DRY-RUN: append exact sudoers rules for detected Wi-Fi interfaces and country"
+fi
+run chown root:root "/etc/sudoers.d/$sudoers_name"
+run chmod 0440 "/etc/sudoers.d/$sudoers_name"
+run visudo -cf "/etc/sudoers.d/$sudoers_name"
+run cp "$repo_dir/installers/openap.txpower.sudoers" /etc/sudoers.d/091_openap_txpower
+run chown root:root /etc/sudoers.d/091_openap_txpower
+run chmod 0440 /etc/sudoers.d/091_openap_txpower
+run visudo -cf /etc/sudoers.d/091_openap_txpower
+
+echo
+echo "Install lighttpd OpenAP service permissions"
+# ProtectSystem=full makes /etc read-only inside lighttpd's mount namespace.
+# Create the networkd directory before lighttpd is (re)started so the
+# ReadWritePaths exception below is materialized for the namespace. Without
+# this, the web UI can reach the privileged helper but the helper cannot
+# create a new .network file during a role transition.
+run install -d -o root -g root -m 0755 /etc/systemd/network
+run mkdir -p /etc/systemd/system/lighttpd.service.d
+run cp "$repo_dir/installers/20-openap-privileges.conf" /etc/systemd/system/lighttpd.service.d/20-openap-privileges.conf
+run chown root:root /etc/systemd/system/lighttpd.service.d/20-openap-privileges.conf
+run chmod 0644 /etc/systemd/system/lighttpd.service.d/20-openap-privileges.conf
+run systemctl daemon-reload
+run systemctl try-restart lighttpd.service
+
+echo
+echo "Create initial OpenAP role profile"
+if [ "$apply" -eq 1 ]; then
+  ap_mac="$(iface_mac "$ap_iface")"
+  uplink_mac="$(iface_mac "$uplink_iface")"
+  ethernet_mac="$(iface_mac "$ethernet_physical_iface")"
+  profile_mode="${mode//-/_}"
+  profile_bridge="openap0"
+  if [ "$raspberry_native" -eq 1 ]; then
+    # Native Raspberry AP mode owns the gateway directly on the selected
+    # wireless interface; there is intentionally no openap0 bridge.
+    profile_bridge=""
+  fi
+  cat > /etc/openap/repeater.ini <<EOF
+[mode]
+current = $profile_mode
+
+[runtime]
+address_backend = $address_backend
+firewall_backend = $firewall_backend
+
+[interfaces]
+ap = $ap_iface
+uplink = $uplink_iface
+ethernet = $ethernet_iface
+ethernet_physical = $ethernet_physical_iface
+bridge = $profile_bridge
+ap_mac = $ap_mac
+uplink_mac = $uplink_mac
+ethernet_mac = $ethernet_mac
+
+[network]
+bridge = $profile_bridge
+subnet = 10.88.77.0/24
+gateway = 10.88.77.1
+dhcp_start = 10.88.77.50
+dhcp_end = 10.88.77.200
+ethernet_gateway =
+
+[wireless]
+country = $wireless_country
+EOF
+  chown www-data:www-data /etc/openap/repeater.ini
+  chmod 0640 /etc/openap/repeater.ini
+
+  # The initial hotspot is configured below for 2.4 GHz (hw_mode=g,
+  # channel 6). Create the schema-v2 role model required by the Dashboard
+  # Ethernet/Repeater helpers. Preserve an existing model during upgrades,
+  # because it may contain an applied dual-band layout or an unsaved draft.
+  if [ ! -e /etc/openap/wifi-roles.ini ]; then
+    roles_tmp="$(mktemp /etc/openap/.wifi-roles.ini.XXXXXX)"
+    cat > "$roles_tmp" <<EOF
+[meta]
+version = 2
+
+[active]
+ap_24ghz = $ap_mac
+ap_5ghz =
+uplink = $uplink_mac
+
+[draft]
+ap_24ghz = $ap_mac
+ap_5ghz =
+uplink = $uplink_mac
+EOF
+    chown www-data:www-data "$roles_tmp"
+    chmod 0640 "$roles_tmp"
+    mv "$roles_tmp" /etc/openap/wifi-roles.ini
+  fi
+
+  # Keep the legacy hotspot state file coherent for code paths and upgrades
+  # that still inspect it. The runtime role profile remains authoritative.
+  python3 - "$ap_iface" "$uplink_iface" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path("/etc/openap/hostapd.ini")
+values = {
+    "WifiInterface": sys.argv[1],
+    "WifiManaged": sys.argv[2],
+}
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+seen = set()
+result = []
+for line in lines:
+    key = line.split("=", 1)[0].strip() if "=" in line else ""
+    if key in values:
+        result.append(f"{key} = {values[key]}")
+        seen.add(key)
+    else:
+        result.append(line)
+for key, value in values.items():
+    if key not in seen:
+        result.append(f"{key} = {value}")
+path.write_text("\n".join(result) + "\n", encoding="utf-8")
+PY
+  chown www-data:www-data /etc/openap/hostapd.ini
+  chmod 0644 /etc/openap/hostapd.ini
+else
+  echo "DRY-RUN: create /etc/openap/repeater.ini for $mode"
+  echo "DRY-RUN: synchronize /etc/openap/hostapd.ini with selected AP/uplink roles"
+fi
+
+echo
+echo "Create baseline service configs if missing"
+if [ "$apply" -eq 1 ]; then
+  if { [ ! -f "$hostapd_config" ] || grep -q '^# Managed by OpenAP universal installer$' "$hostapd_config" || grep -q '^ssid=OpenAP$' "$hostapd_config"; } && [ -n "$ap_iface" ]; then
+    mkdir -p "$(dirname "$hostapd_config")"
+    cat > "$hostapd_config" <<EOF
+# Managed by OpenAP universal installer
+interface=$ap_iface
+driver=nl80211
+country_code=$wireless_country
+ieee80211d=1
+ssid=$hotspot_ssid
+hw_mode=g
+channel=6
+ieee80211n=1
+wmm_enabled=1
+auth_algs=1
+wpa=2
+wpa_key_mgmt=WPA-PSK
+wpa_passphrase=$hotspot_password
+wpa_pairwise=CCMP
+rsn_pairwise=CCMP
+ctrl_interface=/run/hostapd
+ctrl_interface_group=0
+EOF
+  fi
+  if [ -f "$hostapd_config" ] && [ -n "$wireless_country" ]; then
+    set_config_value "$hostapd_config" country_code "$wireless_country"
+    set_config_value "$hostapd_config" ieee80211d 1
+  fi
+  if [ -f "$hostapd_config" ]; then
+    # Credentials may be preserved, but the selected runtime role is always
+    # authoritative for which radio hostapd must own.
+    set_config_value "$hostapd_config" interface "$ap_iface"
+    chgrp www-data "$hostapd_config"
+    chmod 0640 "$hostapd_config"
+    if [ "$raspberry_native" -eq 1 ]; then
+      rm -f /etc/hostapd/hostapd.conf
+      ln -s "$hostapd_config" /etc/hostapd/hostapd.conf
+    fi
+  fi
+
+  if [ -n "$wireless_country" ]; then
+    cat > /etc/systemd/system/openap-regdomain.service <<EOF
+[Unit]
+Description=Set OpenAP wireless regulatory country
+Before=hostapd.service openap-uplink.service
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iw reg set $wireless_country
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
+
+  # Remove every OpenAP-generated AP profile before writing the current one.
+  # DHCP subnet changes can leave an interface-specific 20-IFACE-ap.network
+  # behind. If that radio becomes the uplink during a reinstall, networkd
+  # would otherwise restore the old hotspot gateway on the new uplink and
+  # make the former subnet appear to overlap an active network.
+  for stale_ap_profile in \
+    /etc/systemd/network/20-openap-ap.network \
+    /etc/systemd/network/06-openap-bridge-ap.network \
+    /etc/systemd/network/06-openap-bridge-hotspot.network \
+    /etc/systemd/network/20-*-ap.network; do
+    [ -f "$stale_ap_profile" ] || continue
+    stale_profile_iface="$(awk -F= '$1 ~ /^[[:space:]]*Name[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "$stale_ap_profile")"
+    case "$stale_profile_iface" in
+      ""|*[!A-Za-z0-9_.:-]*) ;;
+      *) stale_networkd_ap_ifaces="$stale_networkd_ap_ifaces $stale_profile_iface" ;;
+    esac
+    rm -f "$stale_ap_profile"
+  done
+
+  # A radio selected for AP duty must not retain OpenAP's station/DHCP
+  # profile from its previous uplink role.
+  rm -f "/etc/systemd/network/30-${ap_iface}-sta.network"
+
+  if [ "$raspberry_native" -eq 0 ]; then
+    # On desktop/server targets the AP gateway belongs to the persistent
+    # bridge, not to the wireless interface.  hostapd's ExecStartPre waits
+    # for 10.88.77.1 on openap0, so create the bridge before starting the AP
+    # services and let networkd enslave the radio through its profile.
+    cat > /etc/systemd/network/15-openap-hotspot.netdev <<EOF
+[NetDev]
+Name=openap0
+Kind=bridge
+
+[Bridge]
+STP=false
+EOF
+
+    cat > /etc/systemd/network/20-openap-hotspot.network <<EOF
+[Match]
+Name=openap0
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=10.88.77.1/24
+DHCP=no
+LinkLocalAddressing=no
+ConfigureWithoutCarrier=yes
+EOF
+
+    cat > "/etc/systemd/network/20-${ap_iface}-ap.network" <<EOF
+[Match]
+Name=$ap_iface
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+DHCP=no
+LinkLocalAddressing=no
+ConfigureWithoutCarrier=yes
+EOF
+
+    rm -f /etc/systemd/network/20-openap-ap.network
+
+    if [ -n "$ethernet_addr_cidr" ] && [ -n "$ethernet_gateway" ]; then
+      cat > "/etc/systemd/network/10-${ethernet_iface}.network" <<EOF
+[Match]
+Name=$ethernet_iface
+
+[Link]
+RequiredForOnline=yes
+
+[Network]
+Address=$ethernet_addr_cidr
+$ethernet_dns_lines
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=no
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=$ethernet_gateway
+Metric=50
+EOF
+    else
+      cat > "/etc/systemd/network/10-${ethernet_iface}.network" <<EOF
+[Match]
+Name=$ethernet_iface
+
+[Link]
+RequiredForOnline=yes
+
+[Network]
+DHCP=ipv4
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=yes
+
+[DHCPv4]
+RouteMetric=50
+UseDNS=yes
+EOF
+    fi
+  fi
+
+  cat > /etc/openap/networking/openap.nft <<EOF
+table ip openap_nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname "$ethernet_iface" ip saddr 10.88.77.0/24 masquerade
+  }
+}
+EOF
+
+  cat > /etc/systemd/system/openap-firewall.service <<'EOF'
+[Unit]
+Description=OpenAP dedicated NAT rules
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sh -c '/usr/sbin/nft list table ip openap_nat >/dev/null 2>&1 && /usr/sbin/nft delete table ip openap_nat || true'
+ExecStart=/usr/sbin/nft -f /etc/openap/networking/openap.nft
+ExecStop=/bin/sh -c '/usr/sbin/nft list table ip openap_nat >/dev/null 2>&1 && /usr/sbin/nft delete table ip openap_nat || true'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > /etc/sysctl.d/90-openap-forward.conf <<'EOF'
+net.ipv4.ip_forward=1
+EOF
+else
+  echo "DRY-RUN: create /etc/hostapd/hostapd.conf if missing"
+  echo "DRY-RUN: persist the selected country in hostapd and openap-regdomain.service"
+  echo "DRY-RUN: create /etc/dnsmasq.d/openap-repeater.conf if missing"
+fi
+
+echo
+echo "Create admin credentials if missing"
+if [ "$apply" -eq 1 ]; then
+  if [ ! -f /etc/openap/openap.auth ]; then
+    admin_hash="$(printf '%s' "$admin_password" | php -r '$password = stream_get_contents(STDIN); echo password_hash($password, PASSWORD_BCRYPT);')"
+    {
+      printf '%s\n' "$admin_user"
+      printf '%s\n' "$admin_hash"
+    } > /etc/openap/openap.auth
+    unset admin_hash
+    chown www-data:www-data /etc/openap/openap.auth
+    chmod 0640 /etc/openap/openap.auth
+    echo "Admin credentials created for username: $admin_user"
+  else
+    echo "SKIP: /etc/openap/openap.auth already exists"
+  fi
+else
+  echo "DRY-RUN: create /etc/openap/openap.auth if missing"
+fi
+
+echo
+echo "Enable lighttpd PHP and OpenAP routing"
+if command -v lighty-enable-mod >/dev/null 2>&1; then
+  if [ "$apply" -eq 1 ]; then
+    lighty-enable-mod fastcgi-php || true
+  else
+    echo "DRY-RUN: lighty-enable-mod fastcgi-php"
+  fi
+elif command -v lighttpd-enable-mod >/dev/null 2>&1; then
+  if [ "$apply" -eq 1 ]; then
+    lighttpd-enable-mod fastcgi-php || true
+  else
+    echo "DRY-RUN: lighttpd-enable-mod fastcgi-php"
+  fi
+else
+  echo "WARN: no lighttpd module enable helper found"
+fi
+run mkdir -p /etc/lighttpd/conf-available /etc/lighttpd/conf-enabled
+run cp "$repo_dir/openap-installer/config/50-openap-router.conf" /etc/lighttpd/conf-available/50-openap-router.conf
+run ln -sf ../conf-available/50-openap-router.conf /etc/lighttpd/conf-enabled/50-openap-router.conf
+run lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+run systemctl enable lighttpd.service
+run systemctl restart lighttpd.service
+
+echo
+echo "Activate initial AP over Ethernet"
+if [ "$mode" = "ap-ethernet" ]; then
+  if [ "$apply" -eq 1 ]; then
+    # AP-over-Ethernet has no Wi-Fi uplink. Stop any previous repeater client
+    # before assigning its radio to hostapd.
+    systemctl disable --now openap-uplink.service >/dev/null 2>&1 || true
+    rfkill unblock wifi || true
+    for network_path in /sys/class/net/*; do
+      stale_iface="$(basename "$network_path")"
+      [ "$stale_iface" != "$ap_iface" ] || continue
+      [ -d "$network_path/wireless" ] || continue
+      stale_gateway_cidr="$(ip -4 -o addr show dev "$stale_iface" | awk \
+        -v previous_iface="$previous_ap_iface" -v iface="$stale_iface" \
+        -v previous_gateway="$previous_ap_gateway" '
+        {
+          split($4, address, "/")
+          if ((iface == previous_iface && previous_gateway != "" && address[1] == previous_gateway) \
+              || address[1] == "10.88.77.1") {
+            print $4
+            exit
+          }
+        }
+      ')"
+      if [ -n "$stale_gateway_cidr" ]; then
+        echo "Remove stale OpenAP gateway $stale_gateway_cidr from previous AP interface: $stale_iface"
+        ip addr del "$stale_gateway_cidr" dev "$stale_iface"
+      fi
+    done
+    if [ "$raspberry_native" -eq 1 ]; then
+      systemctl daemon-reload
+      # networkd may still have a deleted OpenAP AP profile cached. Reload it
+      # before the address service toggles the link, otherwise networkd can
+      # re-add the previous hotspot gateway when carrier returns.
+      if systemctl is-active --quiet systemd-networkd.service; then
+        networkctl reload
+        for stale_networkd_iface in $stale_networkd_ap_ifaces; do
+          networkctl reconfigure "$stale_networkd_iface" >/dev/null 2>&1 || true
+        done
+        networkctl reconfigure "$ap_iface" >/dev/null 2>&1 || true
+      fi
+      systemctl enable openap-ap-address.service
+      systemctl restart openap-ap-address.service
+    else
+      networkctl reload
+      for stale_networkd_iface in $stale_networkd_ap_ifaces; do
+        [ "$stale_networkd_iface" = "$ap_iface" ] && continue
+        networkctl reconfigure "$stale_networkd_iface" >/dev/null 2>&1 || true
+      done
+      networkctl reconfigure openap0
+      networkctl reconfigure "$ap_iface"
+    fi
+    systemctl stop dnsmasq.service || true
+    case "$dns_mode" in
+      auto)
+        if port53_available_on_ap; then
+          dns_mode_selected="local"
+          echo "DNS port 53 is available on 10.88.77.1; enabling local dnsmasq DNS."
+        else
+          dns_mode_selected="external"
+          echo "WARNING: DNS port 53 is already occupied on 10.88.77.1 or by a wildcard listener."
+          echo "Using safe fallback: dnsmasq DHCP-only with external DNS 1.1.1.1 and 1.0.0.1."
+          echo "The existing DNS service was not stopped or modified."
+        fi
+        ;;
+      local)
+        if ! port53_available_on_ap; then
+          echo "ERROR: --dns-mode local requested, but TCP/UDP port 53 is unavailable on 10.88.77.1." >&2
+          echo "Use --dns-mode auto or --dns-mode external, or resolve the DNS conflict." >&2
+          exit 1
+        fi
+        dns_mode_selected="local"
+        ;;
+      external)
+        dns_mode_selected="external"
+        echo "External DNS mode selected: dnsmasq will provide DHCP only."
+        ;;
+    esac
+    configure_dnsmasq "$dns_mode_selected"
+    sysctl -w net.ipv4.ip_forward=1
+    systemctl daemon-reload
+    systemctl unmask hostapd.service
+    systemctl enable openap-regdomain.service hostapd.service dnsmasq.service openap-firewall.service
+    if [ "$raspberry_native" -eq 1 ]; then
+      systemctl enable openap-ap-address.service
+    fi
+    systemctl restart openap-regdomain.service
+    dnsmasq --test
+    nft -c -f /etc/openap/networking/openap.nft
+    # Restart the hotspot stack in one systemd transaction.  dnsmasq requires
+    # hostapd on OpenAP installations; restarting hostapd separately after
+    # dnsmasq can therefore leave dnsmasq briefly activating and make the
+    # immediate is-active check fail with status 3 even though startup later
+    # completes successfully.
+    systemctl reset-failed hostapd.service dnsmasq.service >/dev/null 2>&1 || true
+    systemctl restart hostapd.service dnsmasq.service openap-firewall.service
+    resume_preexisting_dnscrypt_services
+    systemctl is-active --quiet openap-firewall.service
+    systemctl is-active --quiet dnsmasq.service
+    systemctl is-active --quiet hostapd.service
+    echo "Initial hotspot active on $ap_iface (SSID: $hotspot_ssid, gateway: 10.88.77.1)"
+    echo "DNS mode active: $dns_mode_selected"
+  else
+    echo "DRY-RUN: configure 10.88.77.1/24 on $ap_iface"
+    echo "DRY-RUN: select DNS mode ($dns_mode) after testing TCP/UDP 10.88.77.1:53"
+    echo "DRY-RUN: apply the selected regulatory country before starting hostapd"
+    echo "DRY-RUN: enable and start openap-regdomain, hostapd, dnsmasq and openap-firewall"
+  fi
+fi
+
+release_package_start_policy
+
+if [ "$component_profile" = "both" ]; then
+  echo
+  echo "Install APtv component"
+  iptv_args=(--profile both --webroot "$webroot")
+  [ "$apply" -eq 1 ] && iptv_args+=(--apply)
+  [ "$assume_yes" -eq 1 ] && iptv_args+=(--yes)
+  [ "$allow_pending_updates" -eq 1 ] && iptv_args+=(--allow-pending-updates)
+  "$repo_dir/openap-installer/bin/openap-iptv-install" "${iptv_args[@]}"
+fi
+
+echo
+echo "Done."
+if [ "$apply" -eq 1 ]; then
+  if [ "$mode" = "ap-ethernet" ]; then
+    echo "OpenAP installed and initial AP-over-Ethernet services activated."
+  else
+    echo "OpenAP components installed for profile: $mode"
+  fi
+  print_install_summary
+  unset admin_password hotspot_password
+  offer_required_reboot
+else
+  echo "No changes were made."
+fi

@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# Remove only the APtv component and its owned runtime/state.
+set -euo pipefail
+
+apply=0
+assume_yes=0
+keep_ap=0
+webroot="/var/www/html"
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$repo_dir/installers/openap-auth-validate.sh"
+. "$repo_dir/installers/openap-backup-policy.sh"
+payload_dir="$repo_dir/openap-installer/iptv"
+webroot_payload="$payload_dir/webroot-overlay"
+runtime_payload="$payload_dir/runtime"
+backup_dir=""
+
+usage() {
+  cat <<EOF
+Usage: $0 [--apply] [--yes] [--keep-ap] [--webroot PATH]
+
+Removes the APtv component while preserving unrelated files.
+With --keep-ap, the OpenAP network component is redeployed after IPTV removal.
+Default mode is dry-run.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply) apply=1 ;;
+    --yes|-y) assume_yes=1 ;;
+    --keep-ap) keep_ap=1 ;;
+    --webroot) webroot="${2:-}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+  esac
+  shift
+done
+
+case "$webroot" in
+  /*) ;;
+  *) echo 'ERROR: --webroot must be an absolute path.' >&2; exit 1 ;;
+esac
+case "$webroot" in
+  /|/etc|/usr|/var|/home|/root)
+    echo "ERROR: unsafe webroot refused: $webroot" >&2
+    exit 1
+    ;;
+esac
+
+if [ "$apply" -eq 1 ] && [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: --apply must run as root." >&2
+  exit 1
+fi
+
+if [ "$apply" -eq 1 ] && [ "$keep_ap" -eq 1 ] \
+  && [ -e /etc/openap/openap.auth ] \
+  && ! openap_auth_file_is_valid /etc/openap/openap.auth; then
+  echo 'ERROR: /etc/openap/openap.auth is invalid; refusing IPTV removal with OpenAP preserved.' >&2
+  exit 1
+fi
+
+if [ "$apply" -eq 0 ]; then
+  echo 'APtv removal dry-run'
+  echo "  Webroot: $webroot"
+  echo "  Keep OpenAP: $([ "$keep_ap" -eq 1 ] && echo yes || echo no)"
+  echo '  IPTV runtime, services, state, cache and IPTV-only web files would be removed.'
+  exit 0
+fi
+
+if [ "$assume_yes" -eq 0 ]; then
+  if [ ! -t 0 ]; then
+    echo 'ERROR: interactive confirmation is required; use --yes for intentional unattended removal.' >&2
+    exit 1
+  fi
+  answer=""
+  printf 'Type REMOVE IPTV to continue: '
+  IFS= read -r answer
+  [ "$answer" = 'REMOVE IPTV' ] || { echo 'Removal cancelled.'; exit 0; }
+fi
+
+# Keep the terminal notification honest: after confirmation, show the real
+# shell commands executed by the removal path, not a second prose summary.
+PS4='+ '
+set -x
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+backup_dir="/var/backups/openap/iptv-uninstall-$stamp"
+mkdir -p "$backup_dir"
+chmod 0700 "$backup_dir"
+manifest="$backup_dir/manifest"
+openap_backup_manifest "$manifest" \
+  /etc/openap/openap.auth \
+  /etc/openap/components/profile \
+  /etc/openap/release \
+  /etc/lighttpd/conf-available/55-openap-iptv-stream.conf \
+  /etc/lighttpd/conf-enabled/55-openap-iptv-stream.conf \
+  /etc/systemd/system/lighttpd.service.d/10-openap-iptv-sudo.conf \
+  /etc/systemd/system/openap-iptv-vod-httpd.service \
+  /etc/systemd/system/openap-iptv-vod-httpd.service.d \
+  /etc/systemd/system/openap-recording.service \
+  /etc/sudoers.d/openap-iptv \
+  /usr/local/sbin/openap-iptv-index \
+  /usr/local/sbin/openap-iptv-nfs \
+  /usr/local/lib/openap \
+  /usr/local/lib/openap-recording \
+  /usr/lib/openap-iptv \
+  /var/lib/openap-iptv/provider.key \
+  /var/lib/openap-iptv/provider.enc \
+  /var/lib/openap-iptv/providers.enc
+openap_backup_archive "$backup_dir/state.tar.gz" "$manifest"
+openap_backup_prune /var/backups/openap iptv-uninstall
+
+systemctl disable --now openap-iptv-vod-httpd.service openap-recording.service openap-iptv-poster-sweep.timer 2>/dev/null || true
+systemctl reset-failed openap-iptv-vod-httpd.service openap-recording.service 2>/dev/null || true
+
+while IFS= read -r -d '' relative; do
+  case "$relative" in
+    usr/*|etc/*) rm -f -- "/$relative" ;;
+    *) echo "ERROR: unsafe IPTV runtime path: $relative" >&2; exit 1 ;;
+  esac
+done < <(find "$runtime_payload" -type f -printf '%P\0')
+
+rm -f -- \
+  /etc/sudoers.d/openap-iptv \
+  /etc/lighttpd/conf-available/55-openap-iptv-stream.conf \
+  /etc/lighttpd/conf-enabled/55-openap-iptv-stream.conf \
+  /var/log/openap-iptv-installer.log
+
+if [ -L "$webroot/posters" ] && [ "$(readlink -- "$webroot/posters")" = "/var/cache/openap-iptv/posters-served" ]; then
+  rm -f -- "$webroot/posters"
+elif [ -f "$webroot/posters/.openap-poster-cache-owned" ]; then
+  rm -rf -- "$webroot/posters"
+fi
+rm -rf -- \
+  /var/lib/openap-iptv \
+  /var/lib/openap-recording-state \
+  /var/lib/openap-recordings \
+  /var/cache/openap-iptv
+
+# Remove overlay-only web files. Shared files are restored by the selected
+# component installer; files also present in the repository root are retained.
+if [ -d "$webroot_payload" ]; then
+  while IFS= read -r -d '' relative; do
+    [ -f "$repo_dir/$relative" ] && continue
+    target="$webroot/$relative"
+    case "$target" in
+      "$webroot"/*) rm -f -- "$target" ;;
+      *) echo "ERROR: unsafe webroot target: $target" >&2; exit 1 ;;
+    esac
+  done < <(find "$webroot_payload" -type f -printf '%P\0')
+  while IFS= read -r -d '' relative; do
+    target="$webroot/$relative"
+    [ -d "$target" ] && rmdir -- "$target" 2>/dev/null || true
+  done < <(find "$webroot_payload" -depth -type d -printf '%P\0')
+fi
+
+rmdir -- \
+  /usr/lib/openap-iptv \
+  /usr/local/lib/openap-recording \
+  /usr/local/lib/openap \
+  /etc/systemd/system/openap-iptv-vod-httpd.service.d \
+  /etc/systemd/system/lighttpd.service.d 2>/dev/null || true
+systemctl daemon-reload
+
+if [ "$keep_ap" -eq 1 ]; then
+  mkdir -p /etc/openap/components
+  profile_tmp="/etc/openap/components/profile.tmp.$$"
+  printf 'openap\n' > "$profile_tmp"
+  chown root:root "$profile_tmp"
+  chmod 0644 "$profile_tmp"
+  mv -f "$profile_tmp" /etc/openap/components/profile
+  # IPTV removal must remain possible when the host has ordinary pending
+  # package updates. The OpenAP redeploy still refuses broken dpkg state and
+  # unresolved APT dependencies through the installer's normal checks.
+  "$repo_dir/openap-installer/bin/openap-install" --apply --yes --allow-pending-updates --components openap --webroot "$webroot"
+fi
+
+echo 'APtv component removed.'
+echo "Backup: $backup_dir"
+if [ "$keep_ap" -eq 1 ]; then
+  echo 'OpenAP component preserved and redeployed.'
+else
+  echo 'Shared OpenAP files remain until openap-uninstall is run.'
+fi

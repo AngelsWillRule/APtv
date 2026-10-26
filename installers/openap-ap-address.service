@@ -1,0 +1,12 @@
+[Unit]
+Description=Prepare the OpenAP hotspot interface and gateway
+After=network-pre.target NetworkManager.service systemd-rfkill.service
+Before=hostapd.service dnsmasq.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openap-prepare-ap-interface
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

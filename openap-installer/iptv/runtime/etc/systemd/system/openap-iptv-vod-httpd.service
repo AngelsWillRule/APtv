@@ -1,0 +1,23 @@
+[Unit]
+Description=APtv IPTV VOD range proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+RuntimeDirectory=openap-iptv-vod-remux openap-iptv-vod-hls
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/php /usr/local/lib/openap/iptv_vod_httpd.php
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/openap-iptv-vod-remux /run/openap-iptv-vod-hls
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

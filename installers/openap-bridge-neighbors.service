@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh OpenAP bridge client neighbour mappings
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openap-refresh-bridge-neighbors
+Nice=10
+IOSchedulingClass=idle

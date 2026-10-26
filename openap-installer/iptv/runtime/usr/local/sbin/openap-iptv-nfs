@@ -1,0 +1,55 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ ${1:-} != '--host-namespace' ]]; then
+    exec /usr/bin/systemd-run --quiet --wait --pipe --collect --unit="openap-nfs-operation-$$" \
+        /usr/local/sbin/openap-iptv-nfs --host-namespace "$@"
+fi
+shift
+
+mountpoint='/mnt/aptv-recordings'
+recordings_directory="$mountpoint/APtv Recordings"
+action=${1:-}
+
+fail() { echo "$1" >&2; exit 1; }
+[[ $(id -u) -eq 0 ]] || fail 'The NFS helper must run as root.'
+[[ -n "$action" ]] || fail 'Missing NFS action.'
+
+is_mount() {
+    findmnt --mountpoint "$mountpoint" --types nfs,nfs4 >/dev/null 2>&1
+}
+
+case "$action" in
+    status)
+        if is_mount; then
+            printf '%s\n' mounted
+        else
+            printf '%s\n' unmounted
+        fi
+        exit 0
+        ;;
+    mount)
+        [[ $# -eq 3 ]] || fail 'Invalid NFS mount arguments.'
+        server=$2
+        export_path=$3
+        [[ "$server" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,252}(:[0-9]{1,5})?$ ]] || fail 'Invalid NFS server.'
+        [[ "$export_path" == /* && "$export_path" != *$'\n'* && "$export_path" != *$'\r'* && "$export_path" != *' '* && "$export_path" != *$'\t'* ]] || fail 'Invalid NFS export path.'
+        if is_mount; then
+            runuser -u www-data -- /usr/bin/mkdir -p -- "$recordings_directory" || fail 'NFS recordings folder could not be created.'
+            exit 0
+        fi
+        install -d -o www-data -g www-data -m 0770 "$mountpoint"
+        /usr/bin/mount -t nfs -o rw,nosuid,nodev "$server:$export_path" "$mountpoint" || fail 'NFS mount failed.'
+        is_mount || fail 'NFS mount did not become active.'
+        runuser -u www-data -- /usr/bin/mkdir -p -- "$recordings_directory" || fail 'NFS recordings folder could not be created.'
+        ;;
+    unmount)
+        [[ $# -eq 1 ]] || fail 'Invalid NFS unmount arguments.'
+        if is_mount; then
+            /usr/bin/umount -- "$mountpoint" || fail 'NFS mount is busy or could not be unmounted.'
+        fi
+        ;;
+    *)
+        fail 'Invalid NFS action.'
+        ;;
+esac

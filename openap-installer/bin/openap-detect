@@ -1,0 +1,661 @@
+#!/usr/bin/env python3
+"""
+OpenAP installer preflight detector.
+
+Read-only hardware and conflict inventory for the future universal installer.
+It deliberately avoids changing network state.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import time
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+from typing import Any
+
+
+REALTEK_STORAGE_IDS = {
+    ("0bda", "1a2b"): "Realtek USB Wi-Fi storage/install mode; needs usb_modeswitch to become Wi-Fi",
+}
+
+REALTEK_WIFI_IDS = {
+    ("0bda", "c820"): "Realtek 802.11ac Wi-Fi mode",
+}
+
+
+def run(cmd: list[str], timeout: int = 8) -> tuple[int, str, str]:
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return 127, "", str(exc)
+
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+
+
+def realpath(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except OSError:
+        return ""
+
+
+def command_exists(name: str) -> bool:
+    return shutil.which(name) is not None
+
+
+IW_BIN = shutil.which("iw") or ("/usr/sbin/iw" if os.access("/usr/sbin/iw", os.X_OK) else "")
+
+
+def run_iw(args: list[str], timeout: int = 8) -> tuple[int, str, str]:
+    if not IW_BIN:
+        return 127, "", "iw is not available"
+    return run([IW_BIN, *args], timeout)
+
+
+def interface_ipv4(iface: str) -> str:
+    code, out, _ = run(["ip", "-4", "-o", "addr", "show", "dev", iface])
+    if code != 0:
+        return ""
+    for line in out.splitlines():
+        match = re.search(r"\sinet\s+(\d+\.\d+\.\d+\.\d+)(?:/\d+)?", line)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def interface_master(iface: str) -> str:
+    master = Path("/sys/class/net") / iface / "master"
+    if not master.is_symlink():
+        return ""
+    try:
+        return master.resolve().name
+    except OSError:
+        return ""
+
+
+MAC_PATTERN = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$", re.IGNORECASE)
+
+
+def normalize_mac(value: str) -> str:
+    value = value.strip().lower()
+    if not MAC_PATTERN.fullmatch(value) or value == "00:00:00:00:00:00":
+        return ""
+    return value
+
+
+def permanent_mac(iface: str) -> str:
+    if not command_exists("ethtool"):
+        return ""
+    code, out, _ = run(["ethtool", "-P", iface])
+    if code != 0:
+        return ""
+    match = re.search(r"Permanent address:\s*(\S+)", out, re.IGNORECASE)
+    return normalize_mac(match.group(1)) if match else ""
+
+
+@dataclass
+class UsbDevice:
+    busdev: str
+    vendor_id: str
+    product_id: str
+    description: str
+    openap_hint: str = ""
+
+
+@dataclass
+class NetInterface:
+    name: str
+    mac: str
+    permanent_mac: str
+    identity_mac: str
+    iftype: str
+    state: str
+    operstate: str
+    driver: str
+    device_path: str
+    bus: str
+    vendor_id: str
+    product_id: str
+    id_net_name: str
+    id_net_name_mac: str
+    id_net_name_path: str
+    id_net_link_file: str
+    is_wireless: bool
+    wireless_type: str = ""
+    phy: str = ""
+    ssid: str = ""
+    channel: str = ""
+    frequency_mhz: str = ""
+    supports_ap: bool = False
+    supports_managed: bool = False
+    supports_24ghz: bool = False
+    supports_5ghz: bool = False
+    channels: list[dict[str, Any]] = field(default_factory=list)
+    is_virtual: bool = False
+    conflict_hints: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ServiceState:
+    name: str
+    active: str
+    enabled: str
+
+
+def parse_ip_brief() -> dict[str, dict[str, str]]:
+    code, out, _ = run(["ip", "-br", "link"])
+    result: dict[str, dict[str, str]] = {}
+    if code != 0:
+        return result
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            result[parts[0]] = {"state": parts[1], "raw": line}
+    return result
+
+
+def parse_iw_dev() -> dict[str, dict[str, str]]:
+    code, out, _ = run_iw(["dev"])
+    interfaces: dict[str, dict[str, str]] = {}
+    if code != 0:
+        return interfaces
+
+    phy = ""
+    current = ""
+    for line in out.splitlines():
+        stripped = line.strip()
+        match = re.match(r"phy#(\d+)", stripped)
+        if match:
+            phy = f"phy{match.group(1)}"
+            continue
+        match = re.match(r"Interface\s+(\S+)", stripped)
+        if match:
+            current = match.group(1)
+            interfaces[current] = {"phy": phy}
+            continue
+        if not current:
+            continue
+        for key, pattern in {
+            "type": r"type\s+(\S+)",
+            "ssid": r"ssid\s+(.+)",
+            "channel": r"channel\s+(\d+)",
+            "frequency_mhz": r"channel\s+\d+\s+\((\d+)\s+MHz\)",
+        }.items():
+            match = re.match(pattern, stripped)
+            if match:
+                interfaces[current][key] = match.group(1)
+    return interfaces
+
+
+def phy_modes(phy: str) -> set[str]:
+    if not phy:
+        return set()
+    code, out, _ = run_iw(["phy", phy, "info"])
+    if code != 0:
+        return set()
+
+    modes: set[str] = set()
+    in_modes = False
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped == "Supported interface modes:":
+            in_modes = True
+            continue
+        if in_modes and stripped.startswith("* "):
+            modes.add(stripped[2:])
+            continue
+        if in_modes and stripped and not stripped.startswith("* "):
+            break
+    return modes
+
+
+def phy_bands(phy: str) -> tuple[bool, bool]:
+    if not phy:
+        return False, False
+    code, out, _ = run_iw(["phy", phy, "info"])
+    if code != 0:
+        return False, False
+    return bool(re.search(r"\b24\d{2}(?:\.\d+)?\s+MHz\b", out)), bool(re.search(r"\b5[0-9]{3}(?:\.\d+)?\s+MHz\b", out))
+
+
+def phy_channels(phy: str) -> list[dict[str, Any]]:
+    if not phy:
+        return []
+    code, out, _ = run_iw(["phy", phy, "info"])
+    if code != 0:
+        return []
+    channels = []
+    pattern = re.compile(
+        r"\*\s+(\d+(?:\.\d+)?)\s+MHz\s+\[(\d+)\]\s+\(([0-9.]+)\s+dBm\)(.*)$"
+    )
+    for line in out.splitlines():
+        match = pattern.search(line)
+        if not match or "disabled" in match.group(4).lower():
+            continue
+        frequency = int(round(float(match.group(1))))
+        flags = match.group(4).lower()
+        channel = int(match.group(2))
+        no_ir = "no ir" in flags or "no-ir" in flags
+        radar = "radar detection" in flags
+        valid_primary = (
+            frequency < 5000
+            or (36 <= channel <= 144 and channel % 4 == 0)
+            or (149 <= channel <= 177 and (channel - 149) % 4 == 0)
+        )
+        allowed_high_primary = frequency < 5500 or channel in {100, 108, 116, 124, 132, 140, 149, 157, 184, 192}
+        channels.append({
+            "channel": channel,
+            "frequency_mhz": frequency,
+            "max_dbm": int(float(match.group(3))),
+            "band": "2.4" if frequency < 3000 else "5",
+            "no_ir": no_ir,
+            "radar": radar,
+            "selectable": not no_ir and not radar and valid_primary and allowed_high_primary,
+        })
+    return channels
+
+
+def udev_props(iface: str) -> dict[str, str]:
+    path = Path("/sys/class/net") / iface
+    if not path.exists() or not command_exists("udevadm"):
+        return {}
+    code, out, _ = run(["udevadm", "info", "-q", "property", "-p", str(path)])
+    props: dict[str, str] = {}
+    if code != 0:
+        return props
+    for line in out.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            props[key] = value
+    return props
+
+
+def usb_ids_for_iface(iface: str, props: dict[str, str]) -> tuple[str, str, str]:
+    vendor = props.get("ID_USB_VENDOR_ID") or props.get("ID_VENDOR_ID", "").removeprefix("0x")
+    product = props.get("ID_USB_MODEL_ID") or props.get("ID_MODEL_ID", "").removeprefix("0x")
+    bus = props.get("ID_BUS", "")
+    return bus, vendor.lower(), product.lower()
+
+
+def detect_interfaces() -> list[NetInterface]:
+    ip_info = parse_ip_brief()
+    iw_info = parse_iw_dev()
+    interfaces: list[NetInterface] = []
+
+    for path in sorted(Path("/sys/class/net").glob("*")):
+        iface = path.name
+        if iface == "lo":
+            continue
+        props = udev_props(iface)
+        driver_path = path / "device" / "driver"
+        device_path = path / "device"
+        bus, vendor, product = usb_ids_for_iface(iface, props)
+        iw = iw_info.get(iface, {})
+        is_wireless = (path / "wireless").is_dir() or iface in iw_info
+        phy = iw.get("phy", "")
+        modes = phy_modes(phy) if is_wireless else set()
+        band24, band5 = phy_bands(phy) if is_wireless else (False, False)
+        current_mac = normalize_mac(read_text(path / "address"))
+        hardware_mac = permanent_mac(iface)
+
+        info = NetInterface(
+            name=iface,
+            mac=current_mac,
+            permanent_mac=hardware_mac,
+            identity_mac=hardware_mac or current_mac,
+            iftype=read_text(path / "type"),
+            state=ip_info.get(iface, {}).get("state", ""),
+            operstate=read_text(path / "operstate"),
+            driver=Path(realpath(driver_path)).name if driver_path.exists() else "",
+            device_path=realpath(device_path),
+            bus=bus,
+            vendor_id=vendor,
+            product_id=product,
+            id_net_name=props.get("ID_NET_NAME", ""),
+            id_net_name_mac=props.get("ID_NET_NAME_MAC", ""),
+            id_net_name_path=props.get("ID_NET_NAME_PATH", ""),
+            id_net_link_file=props.get("ID_NET_LINK_FILE", ""),
+            is_wireless=is_wireless,
+            wireless_type=iw.get("type", ""),
+            phy=phy,
+            ssid=iw.get("ssid", ""),
+            channel=iw.get("channel", ""),
+            frequency_mhz=iw.get("frequency_mhz", ""),
+            supports_ap="AP" in modes,
+            supports_managed="managed" in modes,
+            supports_24ghz=band24,
+            supports_5ghz=band5,
+            channels=phy_channels(phy) if is_wireless else [],
+            is_virtual=not device_path.exists() or iface.startswith(("br-", "docker", "veth", "tap", "tun", "wg", "neko")),
+        )
+        if info.id_net_link_file.startswith("/etc/"):
+            info.conflict_hints.append(f"local systemd .link naming rule: {info.id_net_link_file}")
+        if info.is_wireless and info.name.startswith("eth"):
+            info.conflict_hints.append("wireless interface has ethernet-like name")
+        interfaces.append(info)
+
+    return interfaces
+
+
+def detect_usb() -> list[UsbDevice]:
+    code, out, _ = run(["lsusb"])
+    devices: list[UsbDevice] = []
+    if code != 0:
+        return devices
+    for line in out.splitlines():
+        match = re.match(r"Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\s*(.*)", line)
+        if not match:
+            continue
+        vendor = match.group(3).lower()
+        product = match.group(4).lower()
+        hint = REALTEK_STORAGE_IDS.get((vendor, product)) or REALTEK_WIFI_IDS.get((vendor, product), "")
+        devices.append(
+            UsbDevice(
+                busdev=f"{match.group(1)}:{match.group(2)}",
+                vendor_id=vendor,
+                product_id=product,
+                description=match.group(5).strip(),
+                openap_hint=hint,
+            )
+        )
+    return devices
+
+
+def service_state(name: str) -> ServiceState:
+    if not command_exists("systemctl"):
+        return ServiceState(name, "unknown", "unknown")
+    active = run(["systemctl", "is-active", name])[1].strip() or "unknown"
+    enabled = run(["systemctl", "is-enabled", name])[1].strip() or "unknown"
+    return ServiceState(name, active, enabled)
+
+
+def detect_services() -> list[ServiceState]:
+    return [
+        service_state(name)
+        for name in [
+            "NetworkManager.service",
+            "systemd-networkd.service",
+            "hostapd.service",
+            "dnsmasq.service",
+            "nftables.service",
+            "openap-uplink.service",
+        ]
+    ]
+
+
+def find_local_link_rules() -> list[dict[str, str]]:
+    rules: list[dict[str, str]] = []
+    for root in [Path("/etc/systemd/network"), Path("/run/systemd/network")]:
+        if not root.exists():
+            continue
+        for path in sorted(root.glob("*.link")):
+            text = read_text(path)
+            if not text:
+                continue
+            if re.search(r"(?m)^\s*Name\s*=", text) or re.search(r"(?m)^\s*MACAddress\s*=", text):
+                rules.append({"path": str(path), "content": text})
+    return rules
+
+
+def propose_roles(interfaces: list[NetInterface]) -> dict[str, Any]:
+    wireless = [i for i in interfaces if i.is_wireless]
+    ap_candidates = [i for i in wireless if i.supports_ap]
+    managed_candidates = [i for i in wireless if i.supports_managed]
+    ethernet = [i for i in interfaces if not i.is_wireless and i.iftype == "1"]
+    ethernet_by_name = {i.name: i for i in ethernet}
+    physical_ethernet = [i for i in ethernet if not i.is_virtual]
+    physical_ethernet.sort(
+        key=lambda i: (
+            not bool(interface_ipv4(interface_master(i.name) or i.name)),
+            i.state != "UP",
+            not bool(i.driver),
+            i.name,
+        )
+    )
+    physical = physical_ethernet[0] if physical_ethernet else None
+    effective = None
+    if physical:
+        effective = ethernet_by_name.get(interface_master(physical.name) or physical.name, physical)
+    if effective is None:
+        ethernet.sort(key=lambda i: (not bool(interface_ipv4(i.name)), i.state != "UP", i.is_virtual, i.name))
+        effective = ethernet[0] if ethernet else None
+
+    usb_role_candidates = [
+        i
+        for i in wireless
+        if i.bus == "usb" and i.supports_ap and i.supports_managed
+    ]
+
+    ap_candidates.sort(
+        key=lambda i: (
+            bool(i.ssid),
+            i.bus != "usb",
+            i.state == "UP",
+            not i.supports_5ghz,
+            i.name,
+        )
+    )
+
+    role_strategy = "default"
+    if len(usb_role_candidates) >= 2:
+        role_strategy = "prefer_usb_pair"
+        usb_role_candidates.sort(
+            key=lambda i: (
+                bool(i.ssid),
+                i.state == "UP",
+                not i.supports_5ghz,
+                i.name,
+            )
+        )
+        ap = usb_role_candidates[0]
+        managed_pool = usb_role_candidates[1:]
+    else:
+        ap = ap_candidates[0] if ap_candidates else None
+        managed_candidates.sort(
+            key=lambda i: (
+                not bool(i.ssid),
+                i.bus == "usb",
+                i.state != "UP",
+                i.name,
+            )
+        )
+        managed_pool = managed_candidates
+
+    uplink = None
+    for candidate in managed_pool:
+        if not ap or candidate.mac != ap.mac:
+            uplink = candidate
+            break
+
+    return {
+        "ap": ap.name if ap else "",
+        "uplink": uplink.name if uplink else "",
+        "ethernet": effective.name if effective else "",
+        "ethernet_physical": physical.name if physical else (effective.name if effective else ""),
+        "valid_repeater": bool(ap and uplink),
+        "valid_ap_ethernet": bool(ap and effective),
+        "role_strategy": role_strategy,
+    }
+
+
+def build_report() -> dict[str, Any]:
+    interfaces = detect_interfaces()
+    usb = detect_usb()
+    return {
+        "schema": "openap-detect/v1",
+        "host": {
+            "hostname": run(["hostname"])[1].strip(),
+            "os_release": read_text(Path("/etc/os-release")),
+        },
+        "interfaces": [asdict(i) for i in interfaces],
+        "usb_devices": [asdict(d) for d in usb],
+        "services": [asdict(s) for s in detect_services()],
+        "local_link_rules": find_local_link_rules(),
+        "proposed_roles": propose_roles(interfaces),
+        "warnings": build_warnings(interfaces, usb),
+    }
+
+
+def build_or_read_cached_report(cache_dir: Path, ttl: float) -> dict[str, Any]:
+    """Share a short-lived detector result between read-only UI requests."""
+    cache_file = cache_dir / "report.json"
+    lock_file = cache_dir / "report.lock"
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        with lock_file.open("a+", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                age = time.time() - cache_file.stat().st_mtime
+                if age <= ttl:
+                    cached = json.loads(cache_file.read_text(encoding="utf-8"))
+                    if isinstance(cached, dict) and cached.get("schema") == "openap-detect/v1":
+                        return cached
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+
+            report = build_report()
+            temp_name = ""
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=cache_dir,
+                    prefix="report.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as temporary:
+                    temp_name = temporary.name
+                    json.dump(report, temporary, sort_keys=True)
+                    temporary.flush()
+                    os.fsync(temporary.fileno())
+                os.chmod(temp_name, 0o644)
+                os.replace(temp_name, cache_file)
+            finally:
+                if temp_name:
+                    try:
+                        os.unlink(temp_name)
+                    except FileNotFoundError:
+                        pass
+            return report
+    except OSError:
+        # Installation and maintenance paths do not rely on this cache.  A UI
+        # request still receives fresh data if its cache directory is missing
+        # or temporarily unavailable.
+        return build_report()
+
+
+def build_warnings(interfaces: list[NetInterface], usb: list[UsbDevice]) -> list[str]:
+    warnings: list[str] = []
+    if any((d.vendor_id, d.product_id) in REALTEK_STORAGE_IDS for d in usb):
+        warnings.append("Realtek USB Wi-Fi device found in storage/install mode; usb_modeswitch required")
+    if any(i.id_net_link_file.startswith("/etc/") for i in interfaces):
+        warnings.append("Local systemd .link network naming rules detected")
+    if any(i.is_wireless and i.name.startswith("eth") for i in interfaces):
+        warnings.append("Wireless interface with ethernet-like name detected")
+    if len([i for i in interfaces if i.is_wireless]) < 2:
+        warnings.append("Fewer than two Wi-Fi interfaces detected; repeater mode may not be available")
+    usb_wifi_devices = [d for d in usb if (d.vendor_id, d.product_id) in REALTEK_WIFI_IDS]
+    usb_wifi_interfaces = [i for i in interfaces if i.is_wireless and i.bus == "usb"]
+    if len(usb_wifi_devices) > len(usb_wifi_interfaces):
+        warnings.append("More USB Wi-Fi devices than host-visible USB Wi-Fi interfaces; one may be passed to a container/namespace or driver-bound differently")
+    return warnings
+
+
+def print_text(report: dict[str, Any]) -> None:
+    print("OpenAP installer preflight")
+    print("==========================")
+    print(f"Host: {report['host']['hostname']}")
+    print()
+    print("Interfaces:")
+    for iface in report["interfaces"]:
+        kind = "wifi" if iface["is_wireless"] else "ethernet"
+        caps = []
+        if iface["supports_ap"]:
+            caps.append("AP")
+        if iface["supports_managed"]:
+            caps.append("managed")
+        if iface["supports_24ghz"]:
+            caps.append("2.4GHz")
+        if iface["supports_5ghz"]:
+            caps.append("5GHz")
+        caps_text = ",".join(caps) if caps else "-"
+        print(
+            f"  {iface['name']:<18} {kind:<8} mac={iface['mac']:<17} "
+            f"driver={iface['driver'] or '-':<14} state={iface['state'] or '-':<8} caps={caps_text}"
+            f"{' virtual' if iface['is_virtual'] else ''}"
+        )
+        if iface["id_net_link_file"].startswith("/etc/"):
+            print(f"    naming-rule: {iface['id_net_link_file']}")
+        if iface["ssid"]:
+            print(f"    connected-ssid: {iface['ssid']}")
+    print()
+    print("USB hints:")
+    for dev in report["usb_devices"]:
+        if dev["openap_hint"]:
+            print(f"  {dev['vendor_id']}:{dev['product_id']} {dev['description']} - {dev['openap_hint']}")
+    print()
+    roles = report["proposed_roles"]
+    print("Proposed roles:")
+    print(f"  AP Wi-Fi:       {roles['ap'] or '-'}")
+    print(f"  Uplink Wi-Fi:   {roles['uplink'] or '-'}")
+    print(f"  Ethernet/LAN:   {roles['ethernet'] or '-'}")
+    print(f"  Strategy:       {roles.get('role_strategy') or 'default'}")
+    print(f"  Repeater mode:  {'available' if roles['valid_repeater'] else 'not available'}")
+    print(f"  AP+Ethernet:    {'available' if roles['valid_ap_ethernet'] else 'not available'}")
+    print()
+    print("Services:")
+    for svc in report["services"]:
+        print(f"  {svc['name']:<28} active={svc['active']:<10} enabled={svc['enabled']}")
+    if report["warnings"]:
+        print()
+        print("Warnings:")
+        for warning in report["warnings"]:
+            print(f"  - {warning}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="OpenAP universal installer preflight detector")
+    parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    parser.add_argument("--cached", action="store_true", help="reuse a short-lived UI inventory cache")
+    parser.add_argument("--cache-ttl", type=float, default=4.0, help="cached inventory lifetime in seconds")
+    args = parser.parse_args()
+
+    if args.cached and not args.json:
+        parser.error("--cached requires --json")
+    if args.cache_ttl < 0 or args.cache_ttl > 30:
+        parser.error("--cache-ttl must be between 0 and 30 seconds")
+    report = (
+        build_or_read_cached_report(Path("/var/cache/openap/detect"), args.cache_ttl)
+        if args.cached
+        else build_report()
+    )
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print_text(report)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

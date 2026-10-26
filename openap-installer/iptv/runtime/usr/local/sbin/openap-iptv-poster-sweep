@@ -1,0 +1,52 @@
+#!/usr/bin/php
+<?php
+
+declare(strict_types=1);
+
+$roots = [
+    '/var/www/html/posters/v1/vod',
+    '/var/www/html/posters/v1/series',
+];
+$negativeRoot = '/var/cache/openap-iptv/poster-failures';
+$bucket = (int) gmdate('G');
+$checked = 0;
+$headerChecked = 0;
+$removed = 0;
+
+foreach ($roots as $root) {
+    if (!is_dir($root)) continue;
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || strtolower($file->getExtension()) !== 'jpg') continue;
+            $path = $file->getPathname();
+            $size = @filesize($path);
+            $checked++;
+            if ($size === false || $size < 32) {
+                if (@unlink($path)) $removed++;
+                continue;
+            }
+            // Spread header validation over 24 hourly buckets.
+            if ((abs((int) crc32($path)) % 24) !== $bucket) continue;
+            $headerChecked++;
+            $image = @getimagesize($path);
+            if (!is_array($image) || (int) ($image[0] ?? 0) < 1 || (int) ($image[1] ?? 0) < 1) {
+                if (@unlink($path)) $removed++;
+            }
+        }
+    } catch (Throwable $error) {
+        error_log('APtv poster sweep failed for ' . $root . ': ' . $error->getMessage());
+    }
+}
+
+if (is_dir($negativeRoot)) {
+    foreach (glob($negativeRoot . '/*.failed') ?: [] as $path) {
+        $mtime = @filemtime($path);
+        if ($mtime !== false && time() - (int) $mtime >= 21600) @unlink($path);
+    }
+}
+
+fwrite(STDOUT, sprintf("APtv poster sweep: checked=%d header_checked=%d removed=%d\n", $checked, $headerChecked, $removed));

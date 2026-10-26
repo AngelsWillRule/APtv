@@ -1,0 +1,15 @@
+[Unit]
+Description=APtv poster cache integrity sweep
+ConditionPathIsDirectory=/var/www/html/posters
+After=lighttpd.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+ExecStart=/usr/local/sbin/openap-iptv-poster-sweep
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/html/posters /var/cache/openap-iptv/poster-failures

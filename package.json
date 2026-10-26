@@ -1,0 +1,32 @@
+{
+    "title": "OpenAP WiFi Management",
+    "name": "openap-webgui",
+    "version": "0.8.0",
+    "private": true,
+    "description": "Web-managed Wi-Fi access point and repeater for supported Debian-based systems",
+    "keywords": [
+        "raspberry-pi",
+        "hostapd",
+        "openap",
+        "wifi-repeater",
+        "wifi",
+        "lighttpd",
+        "dnsmasq",
+        "admin",
+        "app"
+    ],
+    "homepage": "https://github.com/AngelsWillRule/OpenAP",
+    "bugs": {
+        "url": "https://github.com/AngelsWillRule/OpenAP/issues"
+    },
+    "license": "GPL-3.0",
+    "author": "OpenAP contributors",
+    "contributors": [
+        "Bill Zimmerman (https://github.com/billz)",
+        "Lawrence Yau (https://github.com/SirLagz)"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/AngelsWillRule/OpenAP.git"
+    }
+}

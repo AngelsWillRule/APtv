@@ -1,0 +1,83 @@
+# OpenAP webroot deployment exclusions.
+#
+# Paths are relative to the repository root and use rsync filter syntax.
+# Source files remain in the repository for attribution, reference and staged
+# migration; this list only keeps disabled, unsupported modules out of the
+# installed OpenAP webroot.
+
+# Repository, installer and documentation sources are never web content.
+/.gitignore
+/LICENSE
+/NOTICE.md
+/THIRD_PARTY_NOTICES.md
+/README.md
+/VERSION
+/BACKERS.md
+/CODE_OF_CONDUCT.md
+/CONTRIBUTING.md
+/SECURITY.md
+/composer.json
+/gulpfile.js
+/package.json
+/yarn.lock
+/docs/***
+/openap-installer/***
+/installers/***
+
+# The upstream Python REST API is not installed by the OpenAP installer.
+/api/***
+
+# PHP page modules disabled by config/config.repeater.php.
+/includes/adblock.php
+/includes/configure_client.php
+/includes/data_usage.php
+/includes/dhcp.php
+/includes/networking.php
+/includes/openvpn.php
+/includes/provider.php
+/includes/restapi.php
+/includes/wireguard.php
+
+# Templates used exclusively by those disabled page modules.
+/templates/adblock.php
+/templates/adblock/***
+/templates/configure_client.php
+/templates/data_usage.php
+/templates/dhcp.php
+/templates/dhcp/***
+/templates/networking.php
+/templates/networking/***
+/templates/openvpn.php
+/templates/openvpn/***
+/templates/provider.php
+/templates/provider/***
+/templates/restapi.php
+/templates/restapi/***
+/templates/torproxy.php
+/templates/wifi_stations.php
+/templates/wifi_stations/***
+/templates/wireguard.php
+/templates/wg/***
+
+# AJAX endpoints exclusive to disabled Wi-Fi-client and WireGuard pages.
+/ajax/adblock/***
+/ajax/openvpn/***
+/ajax/plugins/***
+/ajax/networking/get_wgcfg.php
+/ajax/networking/get_wgkey.php
+/ajax/networking/wifi_stations.php
+
+# Browser modules used only by disabled legacy pages.
+/app/js/ui/adblock.js
+/app/js/ui/dhcp.js
+/app/js/ui/networking.js
+/app/js/ui/openvpn.js
+/app/js/ui/restapi.js
+/app/js/ui/wg.js
+/app/js/ajax/adblock.js
+/app/js/ajax/dhcp.js
+/app/js/ajax/networking.js
+/app/js/ajax/openvpn.js
+/app/js/ajax/plugins.js
+/app/js/ajax/wg.js
+/app/js/ajax/wpa.js

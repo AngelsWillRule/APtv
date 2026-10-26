@@ -1,0 +1,2517 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: OpenAP 0.2.5.1\n"
+"Report-Msgid-Bugs-To: https://github.com/AngelsWillRule/OpenAP/issues\n"
+"POT-Creation-Date: 2026-08-05 15:59+0000\n"
+"PO-Revision-Date: 2026-04-22 02:22\n"
+"Last-Translator: \n"
+"Language-Team: Japanese\n"
+"Language: ja_JP\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: ajax/networking/get_nl80211_band.php:37
+#, php-format
+msgid ""
+"The selected interface (%s) has support for the 2.4 GHz wireless band only."
+msgstr ""
+"選択したインターフェイス（%s）は、2.4GHzワイヤレスバンドのみをサポートしてい"
+"ます。"
+
+#: ajax/networking/get_nl80211_band.php:40
+#, php-format
+msgid ""
+"The selected interface (%s) has support for the 5 GHz wireless band only."
+msgstr ""
+"選択したインターフェイス（%s）は、5 GHzワイヤレスバンドのみをサポートしていま"
+"す。"
+
+#: ajax/networking/get_nl80211_band.php:43
+#, php-format
+msgid ""
+"The selected interface (%s) has support for both the 2.4 and 5 GHz wireless "
+"bands."
+msgstr ""
+"選択されたインターフェイス（%s）は、2.4GHzと5GHzの両方のワイヤレスバンドをサ"
+"ポートしています。"
+
+#: ajax/networking/get_nl80211_band.php:46
+#, php-format
+msgid "The selected interface (%s) does not support wireless mode operation."
+msgstr ""
+"選択されたインターフェイス（%s）は、ワイヤレスモード操作をサポートしていませ"
+"ん。"
+
+#: app/lib/signprint.php:20
+msgid "Printable Wi-Fi sign"
+msgstr "印刷可能なWi-Fiサイン"
+
+#: app/lib/signprint.php:37
+msgid "Wi-Fi Connect"
+msgstr "Wi-Fiコネクト"
+
+#: app/lib/signprint.php:54
+msgid ""
+"To connect with your phone or tablet, scan the QR code above with your "
+"camera app."
+msgstr ""
+"スマホやタブレットで接続するには、上のQRコードをカメラアプリでスキャンしてく"
+"ださい。"
+
+#: app/lib/signprint.php:55
+msgid "For other devices, use the login credentials below."
+msgstr "その他のデバイスの場合は、以下のログイン認証情報を使用してください。"
+
+#: app/lib/signprint.php:65 templates/ap_configuration.php:174
+#: templates/dashboard.php:729 templates/dashboard.php:1068
+msgid "Network"
+msgstr "ネットワーク"
+
+#: app/lib/signprint.php:67 templates/ap_configuration.php:56
+#: templates/ap_configuration.php:147 templates/ap_configuration.php:175
+#: templates/dashboard.php:357 templates/dashboard.php:834
+#: templates/dashboard.php:1069 templates/hostapd.php:53
+#: templates/wifi_hotspot.php:70
+msgid "Security"
+msgstr "セキュリティ"
+
+#: app/lib/signprint.php:67 templates/wizard_uplink.php:158
+msgid "Password"
+msgstr "パスワード"
+
+#: app/lib/signprint.php:68 templates/ap_configuration.php:57
+msgid "None (open network)"
+msgstr ""
+
+#: includes/dashboard.php:124
+msgid ""
+"DHCP settings are managed by the upstream router while Ethernet Bridge mode "
+"is active."
+msgstr ""
+
+#: includes/dashboard.php:127
+#, fuzzy
+msgid "System reboot requested. OpenAP will be temporarily unavailable."
+msgstr "今すぐ再起動しますか？システムは一時的に使用できなくなります。"
+
+#: includes/dashboard.php:192 includes/dashboard.php:295
+#, php-format
+msgid "%d WLAN %s"
+msgstr "%d WLAN %s"
+
+#: includes/dashboard.php:198 includes/dashboard.php:301
+#, php-format
+msgid "%d LAN %s"
+msgstr "%d LAN %s"
+
+#: includes/dashboard.php:257 templates/dashboard.php:720
+#: templates/dashboard.php:1170 templates/system.php:18
+#, fuzzy
+msgid "WiFi uplink"
+msgstr "WiFiクライアント"
+
+#: includes/dashboard.php:257 templates/dashboard.php:42
+#: templates/dashboard.php:720
+#, fuzzy
+msgid "Ethernet uplink"
+msgstr "イーサネット"
+
+#: includes/dashboard.php:264
+msgid ""
+"Repeater mode requires one AP-capable and one managed-capable WiFi interface."
+msgstr ""
+
+#: includes/dashboard.php:265
+#, php-format
+msgid "Repeater mode requires at least 2 WiFi interfaces. Detected: %d."
+msgstr ""
+
+#: includes/dashboard.php:721
+#, fuzzy
+msgid "Invalid Encrypted DNS state."
+msgstr "無効な DHCP 範囲の開始。"
+
+#: includes/dashboard.php:724
+msgid "Unsupported Encrypted DNS provider."
+msgstr ""
+
+#: includes/dashboard.php:734
+msgid "Unable to apply Encrypted DNS settings: "
+msgstr ""
+
+#: includes/dashboard.php:741
+#, fuzzy
+msgid "Encrypted DNS enabled successfully."
+msgstr "ファイル \"%s\" 削除成功"
+
+#: includes/dashboard.php:742
+msgid "Encrypted DNS disabled; direct public DNS restored."
+msgstr ""
+
+#: includes/dashboard.php:819
+#, fuzzy
+msgid "Invalid service."
+msgstr "無効なインターフェース名。"
+
+#: includes/dashboard.php:826
+msgid "Unable to read this service log."
+msgstr ""
+
+#: includes/dashboard.php:828 templates/logging.php:45
+msgid "No recent log entries."
+msgstr ""
+
+#: includes/footer.php:6
+#, fuzzy, php-format
+msgid ""
+"OpenAP fork based on <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a>"
+msgstr ""
+"によって作成された。 <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a>"
+
+#: includes/footer.php:6
+msgid "RaspAP"
+msgstr "ラスパップ"
+
+#: includes/footer.php:9
+msgid "OpenAP documentation"
+msgstr ""
+
+#: includes/navbar.php:65 templates/login.php:418
+msgid "Change light/dark theme"
+msgstr ""
+
+#: includes/navbar.php:67
+msgid "Theme"
+msgstr "テーマ"
+
+#: includes/navbar.php:73
+msgid "Admin area"
+msgstr ""
+
+#: includes/navbar.php:88
+msgid "Quick navigation"
+msgstr ""
+
+#: includes/navbar.php:93 src/OpenAP/UI/Sidebar.php:18
+msgid "Dashboard"
+msgstr "ダッシュボード"
+
+#: includes/navbar.php:98
+msgid "AP Config"
+msgstr ""
+
+#: includes/navbar.php:103 templates/dashboard.php:325
+msgid "DHCP"
+msgstr ""
+
+#: includes/navbar.php:113
+#, fuzzy
+msgid "Account settings"
+msgstr "口座詳細"
+
+#: includes/navbar.php:114
+msgid "Manage administrator access"
+msgstr ""
+
+#: includes/navbar.php:118 templates/ap_configuration.php:133
+#: templates/ap_configuration.php:167 templates/dashboard.php:594
+#: templates/dashboard.php:642 templates/dashboard.php:1061
+#: templates/dashboard.php:1110 templates/dashboard.php:1140
+#: templates/dashboard.php:1162 templates/hostapd.php:93
+#: templates/system.php:269
+msgid "Close"
+msgstr "閉じる"
+
+#: includes/navbar.php:131
+msgid "Credentials"
+msgstr ""
+
+#: includes/navbar.php:135 templates/admin.php:25
+msgid "Username"
+msgstr "ユーザー名"
+
+#: includes/navbar.php:137 templates/admin.php:28
+msgid "Please provide a valid username."
+msgstr "有効なユーザー名を入力してください。"
+
+#: includes/navbar.php:141
+#, fuzzy
+msgid "Current password"
+msgstr "新しいパスワード"
+
+#: includes/navbar.php:145 templates/admin.php:39
+msgid "Please enter your old password."
+msgstr "古いパスワードを入力してください。"
+
+#: includes/navbar.php:151 templates/admin.php:46
+msgid "New password"
+msgstr "新しいパスワード"
+
+#: includes/navbar.php:155 templates/admin.php:51
+msgid "Please enter a new password."
+msgstr "新しいパスワードを入力してください。"
+
+#: includes/navbar.php:159
+#, fuzzy
+msgid "Repeat password"
+msgstr "新しいパスワードを繰り返す"
+
+#: includes/navbar.php:163 includes/navbar.php:217 includes/navbar.php:239
+#: templates/admin.php:63
+msgid "Please re-enter your new password."
+msgstr "新しいパスワードを再入力してください。"
+
+#: includes/navbar.php:171
+#, fuzzy
+msgid "Active session"
+msgstr "アクティブなDHCPリース"
+
+#: includes/navbar.php:172
+msgid "End the current administrator session and return to login."
+msgstr ""
+
+#: includes/navbar.php:175 templates/admin.php:4
+msgid "Logout"
+msgstr "ログアウト"
+
+#: includes/navbar.php:181 templates/ap_configuration.php:151
+#: templates/system.php:275 templates/wizard_ap_ethernet.php:90
+#: templates/wizard_repeater.php:87
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: includes/navbar.php:184 templates/admin.php:3 templates/hostapd.php:3
+msgid "Save settings"
+msgstr "設定の保存"
+
+#: includes/navbar.php:216
+msgid "Passwords do not match."
+msgstr ""
+
+#: includes/navbar.php:284
+msgid "Saving"
+msgstr ""
+
+#: includes/navbar.php:329
+#, fuzzy
+msgid "Please try again."
+msgstr "有効なネットマスクを入力してください。"
+
+#: includes/navbar.php:330
+#, fuzzy
+msgid "Unable to update account settings."
+msgstr "モバイルデータ設定"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:126
+#, php-format
+msgid "DHCP configuration for %s enabled."
+msgstr "%s 、DHCPコンフィギュレーションが有効。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:148
+msgid "WiFi repeater mode: A metric value is already defined for DHCP."
+msgstr "WiFiリピーターモード：メトリック値はすでにDHCP用に定義されています。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:150
+#, php-format
+msgid "Metric value configured for the %s interface."
+msgstr "%s インターフェースに設定されたメトリック値。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:226
+msgid "Invalid interface name."
+msgstr "無効なインターフェース名。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:229
+msgid "Invalid static IP address."
+msgstr "無効な静的IPアドレスです。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:232
+msgid "Invalid subnet mask."
+msgstr "無効なサブネットマスク。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:235
+msgid "Invalid default gateway."
+msgstr "無効なデフォルトゲートウェイ。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:239
+msgid "Invalid DHCP range start."
+msgstr "無効な DHCP 範囲の開始。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:242
+msgid "Invalid DHCP range end."
+msgstr "無効な DHCP 範囲の終了。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:245
+msgid "Invalid DHCP lease time, not a number."
+msgstr "無効な DHCP リース時間。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:248
+msgid "Unknown DHCP lease time unit."
+msgstr "不明な DHCP リース時間単位。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:251
+msgid "Invalid metric value, not a number."
+msgstr "無効なメトリック値です。"
+
+#: src/OpenAP/Networking/Hotspot/DhcpcdManager.php:276
+#, php-format
+msgid "DHCP configuration for %s updated."
+msgstr "%s のDHCP設定を更新。"
+
+#: src/OpenAP/Networking/Hotspot/DnsmasqManager.php:289
+msgid "Invalid MAC address: "
+msgstr "無効なMACアドレス： "
+
+#: src/OpenAP/Networking/Hotspot/DnsmasqManager.php:292
+msgid "Duplicate IP address entered: "
+msgstr "入力されたIPアドレスが重複している： "
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:111
+msgid "WPA and WPA2"
+msgstr "WPAとWPA2"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:112
+msgid "WPA2 and WPA3-Personal (transitional mode)"
+msgstr "WPA2およびWPA3-Personal（移行モード）"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:114
+#: templates/ap_configuration.php:147 templates/ap_configuration.php:148
+msgid "None"
+msgstr "なし"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:124
+#: templates/dhcp_setting.php:76
+msgid "Disabled"
+msgstr "無効"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:125
+msgid "Enabled (for supported clients)"
+msgstr "有効（サポートされているクライアントの場合）"
+
+#: src/OpenAP/Networking/Hotspot/HotspotService.php:126
+msgid "Required (for supported clients)"
+msgstr "必須（サポート対象クライアント）"
+
+#: src/OpenAP/Networking/Hotspot/WiFiManager.php:384
+msgid "Signal strength"
+msgstr "信号強度"
+
+#: src/OpenAP/UI/Dashboard.php:79 src/OpenAP/UI/Dashboard.php:99
+msgid "No MAC Address Found"
+msgstr "MACアドレスが見つかりません"
+
+#: src/OpenAP/UI/Dashboard.php:82 src/OpenAP/UI/Dashboard.php:126
+msgid "No IPv6 Address Found"
+msgstr "IPv6アドレスが見つかりません"
+
+#: src/OpenAP/UI/Dashboard.php:259
+msgid "client"
+msgid_plural "clients"
+msgstr[0] "顧客"
+
+#: src/OpenAP/UI/Sidebar.php:19 templates/ap_configuration.php:30
+#, fuzzy
+msgid "AP Configuration"
+msgstr "コンフィギュレーション"
+
+#: src/OpenAP/UI/Sidebar.php:22 templates/dhcp_setting.php:103
+#, fuzzy
+msgid "DHCP Setting"
+msgstr "APN設定"
+
+#: src/OpenAP/UI/Sidebar.php:25 templates/dashboard.php:836
+#: templates/hostapd.php:55 templates/hostapd/logging.php:3
+#: templates/logging.php:32
+msgid "Logging"
+msgstr "ロギング"
+
+#: src/OpenAP/UI/Sidebar.php:28
+msgid "DHCP Server"
+msgstr "DHCPサーバー"
+
+#: src/OpenAP/UI/Sidebar.php:31
+msgid "Ad Blocking"
+msgstr "広告ブロック"
+
+#: src/OpenAP/UI/Sidebar.php:34
+msgid "Networking"
+msgstr "ネットワーキング"
+
+#: src/OpenAP/UI/Sidebar.php:37
+msgid "WiFi client"
+msgstr "WiFiクライアント"
+
+#: src/OpenAP/UI/Sidebar.php:40
+msgid "OpenVPN"
+msgstr "オープンVPN"
+
+#: src/OpenAP/UI/Sidebar.php:43
+msgid "WireGuard"
+msgstr "ワイヤーガード"
+
+#: src/OpenAP/UI/Sidebar.php:49
+msgid "Data usage"
+msgstr "データ使用量"
+
+#: src/OpenAP/UI/Sidebar.php:52
+msgid "RestAPI"
+msgstr "レストアピーアイ"
+
+#: src/OpenAP/UI/Sidebar.php:55 templates/system.php:32
+msgid "System"
+msgstr "システム"
+
+#: src/OpenAP/UI/Sidebar.php:58 templates/about/general.php:5
+#, fuzzy
+msgid "About OpenAP"
+msgstr "RaspAPについて"
+
+#: templates/about/general.php:5
+msgid "Project identity and attribution"
+msgstr ""
+
+#: templates/about/general.php:11 templates/about/general.php:15
+#, fuzzy
+msgid "OpenAP"
+msgstr "オープンVPN"
+
+#: templates/about/general.php:14
+#, fuzzy
+msgid "Open wireless access point"
+msgstr "オープンTailscaleログイン"
+
+#: templates/about/general.php:17
+msgid ""
+"A responsive control panel for access points, Ethernet uplinks and WiFi "
+"repeater deployments."
+msgstr ""
+
+#: templates/about/general.php:20
+msgid "Check for update"
+msgstr "アップデートの確認"
+
+#: templates/about/general.php:29
+msgid "About the project"
+msgstr ""
+
+#: templates/about/general.php:29
+msgid "OpenAP profile and purpose"
+msgstr ""
+
+#: templates/about/general.php:32
+msgid ""
+"OpenAP is adapted for existing hostapd installations and for systems where "
+"network interfaces must be discovered by capability and hardware identity "
+"rather than fixed Linux names."
+msgstr ""
+
+#: templates/about/general.php:33
+msgid ""
+"The current project supports a dedicated WiFi access point over Ethernet and "
+"a validated two-radio WiFi repeater workflow, while preserving a clear "
+"separation between the web interface and privileged network helpers."
+msgstr ""
+
+#: templates/about/general.php:40
+msgid "Upstream project and attribution"
+msgstr ""
+
+#: templates/about/general.php:40
+msgid "Open source foundations"
+msgstr ""
+
+#: templates/about/general.php:44
+#, php-format
+msgid ""
+"OpenAP is a fork based on RaspAP, a co-creation of %1$s and %2$s with "
+"contributions from the %3$s and %4$s."
+msgstr ""
+
+#: templates/about/general.php:47
+msgid "developer community"
+msgstr "開発者コミュニティ"
+
+#: templates/about/general.php:48
+msgid "language translators"
+msgstr "言語翻訳者"
+
+#: templates/about/general.php:52
+msgid ""
+"RaspAP attribution and the GPL-3.0 license are retained as part of the "
+"OpenAP source and distribution."
+msgstr ""
+
+#: templates/about/general.php:68
+msgid "OpenAP release"
+msgstr ""
+
+#: templates/about/general.php:68
+#, fuzzy
+msgid "Installed web interface"
+msgstr "無効なインターフェース名。"
+
+#: templates/about/general.php:72
+msgid "Version"
+msgstr "バージョン"
+
+#: templates/about/general.php:74
+msgid "Installed"
+msgstr "設置済み"
+
+#: templates/about/general.php:77
+msgid "Project"
+msgstr ""
+
+#: templates/about/general.php:85
+msgid "OpenAP links"
+msgstr ""
+
+#: templates/about/general.php:85
+msgid "Official project resources"
+msgstr ""
+
+#: templates/about/general.php:90
+#, fuzzy
+msgid "Documentation"
+msgstr "認証"
+
+#: templates/about/general.php:100
+msgid "License"
+msgstr "ライセンス"
+
+#: templates/about/general.php:100
+msgid "Free and open source"
+msgstr ""
+
+#: templates/about/general.php:105
+msgid ""
+"You may use, study, modify and redistribute the software under its license "
+"terms."
+msgstr ""
+
+#: templates/about/general.php:106
+#, fuzzy
+msgid "Read license"
+msgstr "ライセンス"
+
+#: templates/admin.php:14
+msgid "Authentication"
+msgstr "認証"
+
+#: templates/admin.php:20
+#, fuzzy
+msgid "Authentication settings"
+msgstr "認証"
+
+#: templates/admin.php:34
+msgid "Old password"
+msgstr "旧パスワード"
+
+#: templates/admin.php:58
+msgid "Repeat new password"
+msgstr "新しいパスワードを繰り返す"
+
+#: templates/ap_configuration.php:30
+#, fuzzy
+msgid "Wireless access point settings"
+msgstr "無線LANルーティング"
+
+#: templates/ap_configuration.php:41 templates/dashboard.php:833
+#: templates/dhcp_setting.php:117 templates/hostapd.php:52
+msgid "Basic"
+msgstr "ベーシック"
+
+#: templates/ap_configuration.php:43 templates/dashboard.php:845
+#: templates/hostapd/basic.php:16 templates/repeater.php:80
+#: templates/repeater.php:110 templates/repeater.php:126
+#: templates/wizard_repeater.php:52 templates/wizard_uplink.php:154
+msgid "SSID"
+msgstr "SSID"
+
+#: templates/ap_configuration.php:44 templates/dashboard.php:340
+#: templates/dashboard.php:849 templates/wifi_hotspot.php:62
+msgid "Band"
+msgstr ""
+
+#: templates/ap_configuration.php:45 templates/dashboard.php:347
+#: templates/dashboard.php:857 templates/wifi_hotspot.php:62
+msgid "Ch"
+msgstr ""
+
+#: templates/ap_configuration.php:48 templates/dashboard.php:880
+#: templates/hostapd/basic.php:67
+msgid "Wireless Mode"
+msgstr "ワイヤレス・モード"
+
+#: templates/ap_configuration.php:49 templates/dashboard.php:351
+#: templates/dashboard.php:887
+msgid "Width"
+msgstr ""
+
+#: templates/ap_configuration.php:50 templates/dashboard.php:893
+msgid "TX dBm"
+msgstr ""
+
+#: templates/ap_configuration.php:57 templates/dashboard.php:906
+#, fuzzy
+msgid "Security Type"
+msgstr "セキュリティ・タイプ"
+
+#: templates/ap_configuration.php:57 templates/ap_configuration.php:148
+#: templates/dashboard.php:910
+#, fuzzy
+msgid "Encryption"
+msgstr "暗号化タイプ"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:916
+#, fuzzy
+msgid "Pre-shared Key (PSK)"
+msgstr "事前共有鍵（PSK）"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:919
+msgid "Toggle visibility"
+msgstr ""
+
+#: templates/ap_configuration.php:58
+msgid "Toggle password visibility"
+msgstr ""
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:922
+#, fuzzy
+msgid "WiFi QR code"
+msgstr "WiFiクライアント"
+
+#: templates/ap_configuration.php:58 templates/dashboard.php:922
+msgid "Open WiFi QR code"
+msgstr ""
+
+#: templates/ap_configuration.php:59
+msgid ""
+"Open networks have no password or traffic encryption. Anyone within range "
+"can connect."
+msgstr ""
+
+#: templates/ap_configuration.php:59
+msgid "WPA2-PSK with AES/CCMP is used for client compatibility."
+msgstr ""
+
+#: templates/ap_configuration.php:64 templates/ap_configuration.php:69
+#: templates/dashboard.php:984
+#, fuzzy
+msgid "AP Isolation"
+msgstr "AP分離を有効にする"
+
+#: templates/ap_configuration.php:65
+msgid "Prevents wireless clients from communicating directly with each other."
+msgstr ""
+
+#: templates/ap_configuration.php:76 templates/ap_configuration.php:81
+msgid "Hidden SSID"
+msgstr ""
+
+#: templates/ap_configuration.php:77
+msgid "Stops the network name from appearing in normal WiFi scans."
+msgstr ""
+
+#: templates/ap_configuration.php:90 templates/dashboard.php:1035
+#, fuzzy
+msgid "Restart"
+msgstr "dnsmasqを再起動する"
+
+#: templates/ap_configuration.php:91 templates/dashboard.php:1043
+#: templates/dhcp_setting.php:180 templates/wizard_ap_ethernet.php:94
+msgid "Save"
+msgstr "セーブ"
+
+#: templates/ap_configuration.php:107 templates/dashboard.php:129
+#: templates/dhcp_setting.php:252 templates/logging.php:56
+#, fuzzy
+msgid "DHCP setting"
+msgstr "DHCPサーバーの設定"
+
+#: templates/ap_configuration.php:107 templates/dashboard.php:130
+#: templates/dhcp_setting.php:103 templates/dhcp_setting.php:252
+#: templates/logging.php:56
+#, fuzzy
+msgid "Hotspot address pool"
+msgstr "MACアドレス制御"
+
+#: templates/ap_configuration.php:111 templates/dashboard.php:148
+#: templates/dhcp_setting.php:256 templates/logging.php:57
+#, fuzzy
+msgid "Leases active"
+msgstr "リース時間"
+
+#: templates/ap_configuration.php:112 templates/dashboard.php:151
+#: templates/dhcp_setting.php:257 templates/logging.php:57
+#, fuzzy
+msgid "Lease"
+msgstr "リース時間"
+
+#: templates/ap_configuration.php:114 templates/dashboard.php:155
+#: templates/dhcp_setting.php:259
+#, fuzzy
+msgid "DHCP leases in use"
+msgstr "アクティブなDHCPリース"
+
+#: templates/ap_configuration.php:116 templates/dashboard.php:165
+#: templates/dhcp_setting.php:261 templates/logging.php:59
+msgid "Pool"
+msgstr ""
+
+#: templates/ap_configuration.php:128
+#, fuzzy
+msgid "Open network"
+msgstr "ネットワーク"
+
+#: templates/ap_configuration.php:129
+msgid "Confirm hotspot security"
+msgstr ""
+
+#: templates/ap_configuration.php:137
+#, fuzzy
+msgid "Security mode"
+msgstr "セキュリティ・タイプ"
+
+#: templates/ap_configuration.php:141
+msgid "No password or encryption"
+msgstr ""
+
+#: templates/ap_configuration.php:142
+msgid ""
+"Anyone within range will be able to connect to this hotspot and inspect "
+"unencrypted wireless traffic."
+msgstr ""
+
+#: templates/ap_configuration.php:145
+msgid "Only continue if an open network is intentional."
+msgstr ""
+
+#: templates/ap_configuration.php:152
+msgid "Create open network"
+msgstr ""
+
+#: templates/ap_configuration.php:164 templates/dashboard.php:1058
+#, fuzzy
+msgid "WiFi access"
+msgstr "WiFiクライアント"
+
+#: templates/ap_configuration.php:171 templates/dashboard.php:1065
+msgid "OpenAP WiFi QR code"
+msgstr ""
+
+#: templates/ap_configuration.php:177 templates/dashboard.php:1071
+msgid "Scan with a phone camera to join the hotspot."
+msgstr ""
+
+#: templates/ap_configuration.php:180 templates/dashboard.php:1074
+msgid "Open full page"
+msgstr ""
+
+#: templates/ap_configuration.php:181 templates/dashboard.php:1075
+#, fuzzy
+msgid "Download SVG"
+msgstr "ダウンロード"
+
+#: templates/clients.php:5
+#, fuzzy
+msgid "Hotspot clients"
+msgstr "ホットスポット"
+
+#: templates/clients.php:12 templates/dashboard.php:527 templates/system.php:93
+msgid "Hostname"
+msgstr "ホスト名"
+
+#: templates/clients.php:13 templates/dashboard.php:528
+#: templates/repeater.php:53 templates/repeater.php:112
+msgid "IP"
+msgstr ""
+
+#: templates/clients.php:14 templates/dashboard.php:530
+#: templates/repeater.php:52 templates/repeater.php:77
+#: templates/wizard_repeater.php:27 templates/wizard_repeater.php:36
+#: templates/wizard_repeater.php:49
+msgid "MAC"
+msgstr ""
+
+#: templates/clients.php:15 templates/dashboard.php:531
+#: templates/repeater.php:114 templates/wizard_uplink.php:35
+msgid "Signal"
+msgstr ""
+
+#: templates/clients.php:16
+msgid "RX rate"
+msgstr ""
+
+#: templates/clients.php:17
+msgid "TX rate"
+msgstr ""
+
+#: templates/clients.php:18 templates/dashboard.php:475
+#: templates/dashboard.php:666 templates/wizard_ap_ethernet.php:85
+msgid "Connected"
+msgstr "接続済み"
+
+#: templates/clients.php:19 templates/repeater.php:111
+#: templates/repeater.php:127 templates/system.php:133
+#, fuzzy
+msgid "State"
+msgstr "ステータス"
+
+#: templates/clients.php:37
+msgid "No hotspot clients found."
+msgstr ""
+
+#: templates/clients.php:44
+#, fuzzy
+msgid "Information provided by hostapd, dnsmasq and ARP."
+msgstr "hostapdが提供する情報"
+
+#: templates/dashboard.php:42
+msgid "Uplink AP"
+msgstr ""
+
+#: templates/dashboard.php:45
+msgid "Uplink unavailable"
+msgstr ""
+
+#: templates/dashboard.php:61 templates/wifi_hotspot.php:16
+#: templates/wizard_ap_ethernet.php:35 templates/wizard_ap_ethernet.php:56
+#, fuzzy
+msgid "Ethernet Bridge"
+msgstr "イーサネット"
+
+#: templates/dashboard.php:62 templates/dashboard.php:276
+#: templates/wifi_hotspot.php:16 templates/wizard_ap_ethernet.php:86
+#, fuzzy
+msgid "AP Ethernet"
+msgstr "イーサネット"
+
+#: templates/dashboard.php:62 templates/repeater.php:6
+#: templates/wifi_hotspot.php:16
+msgid "Repeater"
+msgstr "リピーター"
+
+#: templates/dashboard.php:64 templates/logging.php:33
+#: templates/wifi_hotspot.php:33
+msgid "Live"
+msgstr ""
+
+#: templates/dashboard.php:88 templates/dashboard.php:138
+#: templates/dashboard.php:516
+#, fuzzy
+msgid "Upstream DHCP"
+msgstr "上流のDNSサーバー"
+
+#: templates/dashboard.php:130
+msgid "Upstream managed"
+msgstr ""
+
+#: templates/dashboard.php:141
+msgid "Addresses and leases are managed by the upstream router."
+msgstr ""
+
+#: templates/dashboard.php:162
+msgid "Managed upstream"
+msgstr ""
+
+#: templates/dashboard.php:163
+msgid "Local DHCP disabled"
+msgstr ""
+
+#: templates/dashboard.php:187
+#, fuzzy
+msgid "Network Topology"
+msgstr "ネットワーキング"
+
+#: templates/dashboard.php:187
+#, fuzzy
+msgid "Interfaces and connectivity"
+msgstr "インターネット接続"
+
+#: templates/dashboard.php:191 templates/wifi_hotspot.php:29
+msgid "Status"
+msgstr "ステータス"
+
+#: templates/dashboard.php:191 templates/wifi_hotspot.php:29
+msgid "Healthy"
+msgstr ""
+
+#: templates/dashboard.php:191 templates/dhcp_setting.php:76
+#: templates/wifi_hotspot.php:29
+msgid "Degraded"
+msgstr ""
+
+#: templates/dashboard.php:207 templates/dashboard.php:221
+#, fuzzy
+msgid "Active"
+msgstr "アクティベート"
+
+#: templates/dashboard.php:207 templates/dashboard.php:221
+#, fuzzy
+msgid "Interrupted"
+msgstr "インターフェース"
+
+#: templates/dashboard.php:209 templates/dashboard.php:1175
+#, fuzzy
+msgid "Internet"
+msgstr "イーサネット"
+
+#: templates/dashboard.php:210
+msgid "Upstream"
+msgstr ""
+
+#: templates/dashboard.php:210
+msgid "Offline"
+msgstr ""
+
+#: templates/dashboard.php:253 templates/dashboard.php:376
+#: templates/repeater.php:131 templates/wifi_hotspot.php:78
+msgid "Clients"
+msgstr "顧客"
+
+#: templates/dashboard.php:264 templates/dashboard.php:270
+#, fuzzy
+msgid "Operating Mode"
+msgstr "ソースの更新"
+
+#: templates/dashboard.php:265
+msgid "Choose the active uplink path"
+msgstr ""
+
+#: templates/dashboard.php:269
+#, fuzzy
+msgid "● Bridge"
+msgstr "ブリッジ"
+
+#: templates/dashboard.php:269
+msgid "● Routed / NAT"
+msgstr ""
+
+#: templates/dashboard.php:283
+#, fuzzy
+msgid "Configure repeater mode"
+msgstr "新しい出口ノードを設定する"
+
+#: templates/dashboard.php:283
+msgid "Switch AP Ethernet to Routed / NAT first"
+msgstr ""
+
+#: templates/dashboard.php:283
+msgid "Repeater mode requires at least 2 WiFi interfaces."
+msgstr ""
+
+#: templates/dashboard.php:285 templates/dashboard.php:1131
+#, fuzzy
+msgid "Repeater Mode"
+msgstr "リピーター"
+
+#: templates/dashboard.php:286
+msgid "Routed first"
+msgstr ""
+
+#: templates/dashboard.php:286
+msgid "2 WiFi required"
+msgstr ""
+
+#: templates/dashboard.php:297 templates/wifi_hotspot.php:25
+#: templates/wifi_hotspot.php:39
+#, fuzzy
+msgid "WiFi Hotspot"
+msgstr "ホットスポット"
+
+#: templates/dashboard.php:305 templates/wifi_hotspot.php:51
+msgid "Running"
+msgstr ""
+
+#: templates/dashboard.php:307 templates/wifi_hotspot.php:53
+#, fuzzy
+msgid "Stopped"
+msgstr "キャプチャ停止"
+
+#: templates/dashboard.php:310 templates/wifi_hotspot.php:55
+msgid "Hidden"
+msgstr ""
+
+#: templates/dashboard.php:317
+#, fuzzy
+msgid "Restart AP service"
+msgstr "RestAPIサービスを開始する"
+
+#: templates/dashboard.php:318 templates/repeater.php:82
+#: templates/wizard_repeater.php:54
+msgid "AP"
+msgstr "AP"
+
+#: templates/dashboard.php:324
+#, fuzzy
+msgid "Restart DHCP/DNS service"
+msgstr "RestAPIサービスを開始する"
+
+#: templates/dashboard.php:328
+msgid "Show AP and DHCP logs"
+msgstr ""
+
+#: templates/dashboard.php:329
+msgid "Logs"
+msgstr ""
+
+#: templates/dashboard.php:332
+#, fuzzy
+msgid "Configure"
+msgstr "デバイスの設定"
+
+#: templates/dashboard.php:370 templates/wifi_hotspot.php:74
+msgid "TX Power"
+msgstr ""
+
+#: templates/dashboard.php:379 templates/dashboard.php:641
+#: templates/wifi_hotspot.php:78
+#, fuzzy
+msgid "connected"
+msgstr "接続済み"
+
+#: templates/dashboard.php:391 templates/repeater.php:105
+#: templates/wifi_hotspot.php:83 templates/wizard_ap_ethernet.php:85
+msgid "Uplink"
+msgstr ""
+
+#: templates/dashboard.php:400 templates/wifi_hotspot.php:89
+#, fuzzy
+msgid "Not connected"
+msgstr "接続済み"
+
+#: templates/dashboard.php:414
+msgid "Live Network Traffic"
+msgstr ""
+
+#: templates/dashboard.php:415
+msgid "Real-time throughput by interface"
+msgstr ""
+
+#: templates/dashboard.php:438 templates/dashboard.php:480
+msgid "Download"
+msgstr "ダウンロード"
+
+#: templates/dashboard.php:442 templates/dashboard.php:484
+msgid "Upload"
+msgstr "アップロード"
+
+#: templates/dashboard.php:454 templates/dashboard.php:496
+msgid "Traffic total"
+msgstr ""
+
+#: templates/dashboard.php:456 templates/dashboard.php:498
+#, fuzzy
+msgid "since interface start"
+msgstr "インターフェース"
+
+#: templates/dashboard.php:475
+msgid "Disconnected"
+msgstr "切断"
+
+#: templates/dashboard.php:511 templates/dashboard.php:589
+#, fuzzy
+msgid "Connected Clients"
+msgstr "接続済み"
+
+#: templates/dashboard.php:511
+msgid "Associated hotspot devices"
+msgstr ""
+
+#: templates/dashboard.php:514
+msgid "total"
+msgstr ""
+
+#: templates/dashboard.php:518
+msgid "leased"
+msgstr ""
+
+#: templates/dashboard.php:529
+#, fuzzy
+msgid "Traffic"
+msgstr "すべての交通"
+
+#: templates/dashboard.php:552 templates/dashboard.php:617
+msgid "Total"
+msgstr ""
+
+#: templates/dashboard.php:552 templates/dashboard.php:617
+#, fuzzy
+msgid "Top usage"
+msgstr "データ使用量"
+
+#: templates/dashboard.php:560 templates/dashboard.php:626
+msgid "Online"
+msgstr ""
+
+#: templates/dashboard.php:569 templates/dashboard.php:635
+#, fuzzy
+msgid "No clients connected"
+msgstr "切断"
+
+#: templates/dashboard.php:577
+#, fuzzy
+msgid "View all clients"
+msgstr "ファイアウォール設定"
+
+#: templates/dashboard.php:590
+#, php-format
+msgid "%d devices currently associated with the hotspot"
+msgstr ""
+
+#: templates/dashboard.php:608
+#, fuzzy
+msgid "Unknown device"
+msgstr "デバイスの設定"
+
+#: templates/dashboard.php:636
+msgid "Associated hotspot devices will appear here."
+msgstr ""
+
+#: templates/dashboard.php:658
+#, fuzzy
+msgid "Connected clients"
+msgstr "接続済み"
+
+#: templates/dashboard.php:659
+#, fuzzy
+msgid "Stations on the hotspot"
+msgstr "ホットスポットの開始"
+
+#: templates/dashboard.php:667
+#, fuzzy
+msgid "WiFi stations"
+msgstr "Wifiステーションが見つからない"
+
+#: templates/dashboard.php:687
+#, fuzzy
+msgid "Hotspot traffic"
+msgstr "ホットスポット"
+
+#: templates/dashboard.php:688
+msgid "Totals since interface start"
+msgstr ""
+
+#: templates/dashboard.php:695
+msgid "Sent"
+msgstr ""
+
+#: templates/dashboard.php:696
+#, fuzzy
+msgid "AP → clients"
+msgstr "顧客"
+
+#: templates/dashboard.php:703
+#, fuzzy
+msgid "Received"
+msgstr "受け取る"
+
+#: templates/dashboard.php:704
+#, fuzzy
+msgid "Clients → AP"
+msgstr "顧客"
+
+#: templates/dashboard.php:710
+msgid "Sent through the uplink"
+msgstr ""
+
+#: templates/dashboard.php:710
+msgid "Uplink sent"
+msgstr ""
+
+#: templates/dashboard.php:711
+msgid "Received through the uplink"
+msgstr ""
+
+#: templates/dashboard.php:711
+msgid "Uplink received"
+msgstr ""
+
+#: templates/dashboard.php:721 templates/wizard_ap_ethernet.php:69
+msgid "Active network path"
+msgstr ""
+
+#: templates/dashboard.php:737 templates/dashboard.php:754
+#: templates/dhcp_setting.php:120 templates/hostapd/advanced.php:52
+#: templates/repeater.php:141
+msgid "Gateway"
+msgstr "ゲートウェイ"
+
+#: templates/dashboard.php:738 templates/dashboard.php:755
+#, fuzzy
+msgid "Default route"
+msgstr "デフォルトゲートウェイ"
+
+#: templates/dashboard.php:746 templates/hostapd/basic.php:5
+#: templates/repeater.php:76 templates/repeater.php:108
+#: templates/repeater.php:124 templates/wizard_ap_ethernet.php:68
+#: templates/wizard_repeater.php:26 templates/wizard_repeater.php:35
+#: templates/wizard_repeater.php:48 templates/wizard_uplink.php:150
+msgid "Interface"
+msgstr "インターフェース"
+
+#: templates/dashboard.php:772 templates/system.php:212
+#, fuzzy
+msgid "System health"
+msgstr "システムテーマ"
+
+#: templates/dashboard.php:773 templates/system.php:213
+msgid "Live resource usage"
+msgstr ""
+
+#: templates/dashboard.php:778 templates/system.php:218
+#, fuzzy
+msgid "CPU used"
+msgstr "CPU負荷"
+
+#: templates/dashboard.php:779 templates/system.php:219
+msgid "RAM used"
+msgstr ""
+
+#: templates/dashboard.php:780 templates/system.php:80 templates/system.php:220
+msgid "Temperature"
+msgstr ""
+
+#: templates/dashboard.php:781 templates/system.php:99 templates/system.php:221
+msgid "Uptime"
+msgstr "アップタイム"
+
+#: templates/dashboard.php:785 templates/system.php:75 templates/system.php:225
+msgid "Disk"
+msgstr ""
+
+#: templates/dashboard.php:786 templates/system.php:226
+#, fuzzy
+msgid "Load"
+msgstr "CPU負荷"
+
+#: templates/dashboard.php:817
+#, fuzzy
+msgid "WiFi Hotspot Settings"
+msgstr "ルート設定の編集"
+
+#: templates/dashboard.php:832
+#, fuzzy
+msgid "WiFi hotspot settings"
+msgstr "ルート設定の編集"
+
+#: templates/dashboard.php:835 templates/hostapd.php:54
+msgid "Advanced"
+msgstr "上級"
+
+#: templates/dashboard.php:872
+msgid "No channels available"
+msgstr ""
+
+#: templates/dashboard.php:937
+msgid "recommended for compatibility"
+msgstr ""
+
+#: templates/dashboard.php:945
+msgid "Country"
+msgstr "国名"
+
+#: templates/dashboard.php:949
+#, fuzzy
+msgid "Beacon Interval"
+msgstr "ビーコン間隔"
+
+#: templates/dashboard.php:959
+msgid "RTS Threshold"
+msgstr ""
+
+#: templates/dashboard.php:963
+msgid "Frag. Threshold"
+msgstr ""
+
+#: templates/dashboard.php:967
+msgid "Max STA"
+msgstr ""
+
+#: templates/dashboard.php:973
+#, fuzzy
+msgid "Options"
+msgstr "行動"
+
+#: templates/dashboard.php:990
+#, fuzzy
+msgid "Ign. Broadcast"
+msgstr "ブロードキャストでSSIDを隠す"
+
+#: templates/dashboard.php:996
+msgid "Probe Resp."
+msgstr ""
+
+#: templates/dashboard.php:1003
+#, fuzzy
+msgid "Edit full configuration in"
+msgstr "ブリッジ・インターフェース設定"
+
+#: templates/dashboard.php:1014
+msgid "Enable logging"
+msgstr "ロギングを有効にする"
+
+#: templates/dashboard.php:1016
+msgid "live"
+msgstr ""
+
+#: templates/dashboard.php:1021
+#, fuzzy
+msgid "Started"
+msgstr "ワイヤーガード開始"
+
+#: templates/dashboard.php:1024
+msgid "Full log"
+msgstr ""
+
+#: templates/dashboard.php:1089
+msgid "AP and DHCP logs"
+msgstr ""
+
+#: templates/dashboard.php:1093
+msgid "No recent AP/DHCP logs."
+msgstr ""
+
+#: templates/dashboard.php:1105 templates/dashboard.php:1116
+#: templates/wizard_ap_ethernet.php:17
+#, fuzzy
+msgid "AP via Ethernet"
+msgstr "イーサネット"
+
+#: templates/dashboard.php:1106
+#, fuzzy
+msgid "Configure wired uplink"
+msgstr "デバイスの設定"
+
+#: templates/dashboard.php:1117
+#, fuzzy
+msgid "Loading configuration..."
+msgstr "コンフィギュレーション"
+
+#: templates/dashboard.php:1132
+msgid "Select the WiFi uplink network"
+msgstr ""
+
+#: templates/dashboard.php:1137 templates/repeater.php:23
+#, fuzzy
+msgid "Change uplink"
+msgstr "チャンネル"
+
+#: templates/dashboard.php:1150
+msgid "Scanning for available networks"
+msgstr ""
+
+#: templates/dashboard.php:1164
+#, fuzzy
+msgid "Restoring Internet connection"
+msgstr "インターネット接続"
+
+#: templates/dashboard.php:1165
+msgid "The OpenAP hotspot remains active while the uplink recovers."
+msgstr ""
+
+#: templates/dashboard.php:1180
+msgid "WiFi uplink is unavailable"
+msgstr ""
+
+#: templates/dashboard.php:1181
+msgid "OpenAP is checking the saved network"
+msgstr ""
+
+#: templates/dashboard.php:1185
+msgid "Uplink loss detected"
+msgstr ""
+
+#: templates/dashboard.php:1186
+msgid "Trying the saved WiFi uplink"
+msgstr ""
+
+#: templates/dashboard.php:1187
+msgid "Waiting for IP and Internet"
+msgstr ""
+
+#: templates/dashboard.php:1192
+msgid "AP Ethernet fallback"
+msgstr ""
+
+#: templates/dashboard.php:1193
+#, fuzzy
+msgid "Checking the Ethernet connection…"
+msgstr "インターネット接続"
+
+#: templates/dashboard.php:1196
+msgid "Switch to AP Ethernet"
+msgstr ""
+
+#: templates/dashboard.php:1209
+#, fuzzy
+msgid "System is rebooting"
+msgstr "システムの再起動"
+
+#: templates/dashboard.php:1211
+msgid "Waiting for OpenAP to become reachable again."
+msgstr ""
+
+#: templates/dashboard.php:1248
+msgid "Connection restored. Reloading dashboard..."
+msgstr ""
+
+#: templates/dashboard.php:1268
+msgid "Reboot command sent. Waiting for services to restart..."
+msgstr ""
+
+#: templates/dashboard.php:1273
+msgid "OpenAP is going offline..."
+msgstr ""
+
+#: templates/dashboard.php:1274
+msgid "Reconnecting to OpenAP..."
+msgstr ""
+
+#: templates/dhcp_setting.php:42 templates/dhcp_setting.php:52
+#: templates/dhcp_setting.php:169
+#, fuzzy
+msgid "Local DNS"
+msgstr "地方港"
+
+#: templates/dhcp_setting.php:42 templates/dhcp_setting.php:169
+msgid "External DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:73
+msgid "Ready, not enforced"
+msgstr ""
+
+#: templates/dhcp_setting.php:75
+#, fuzzy
+msgid "Protected"
+msgstr "接続済み"
+
+#: templates/dhcp_setting.php:108
+#, fuzzy
+msgid "Ethernet Bridge mode"
+msgstr "ブリッジAPモード"
+
+#: templates/dhcp_setting.php:108
+msgid ""
+"Subnet, gateway, DHCP pool and client DNS are assigned by the upstream "
+"router. The values below are shown for reference and cannot be edited."
+msgstr ""
+
+#: templates/dhcp_setting.php:119
+#, fuzzy
+msgid "Hotspot subnet"
+msgstr "ホットスポット"
+
+#: templates/dhcp_setting.php:121
+#, fuzzy
+msgid "AP interface"
+msgstr "インターフェース"
+
+#: templates/dhcp_setting.php:126
+#, fuzzy
+msgid "DHCP Pool"
+msgstr "DHCPオプション"
+
+#: templates/dhcp_setting.php:128
+#, fuzzy
+msgid "Range start"
+msgstr "テールネットの状態"
+
+#: templates/dhcp_setting.php:129
+msgid "Range end"
+msgstr ""
+
+#: templates/dhcp_setting.php:130
+#, fuzzy
+msgid "Lease time"
+msgstr "リース時間"
+
+#: templates/dhcp_setting.php:135 templates/dhcp_setting.php:140
+msgid "Protected DNS path"
+msgstr ""
+
+#: templates/dhcp_setting.php:135
+msgid "Standard DNS (compatibility)"
+msgstr ""
+
+#: templates/dhcp_setting.php:143
+#, fuzzy
+msgid "Client DNS"
+msgstr "クライアントID"
+
+#: templates/dhcp_setting.php:149
+#, fuzzy
+msgid "Encrypted proxy"
+msgstr "暗号化タイプ"
+
+#: templates/dhcp_setting.php:155
+msgid "Secure provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:161 templates/dhcp_setting.php:216
+#, fuzzy
+msgid "Transport"
+msgstr "翻訳者"
+
+#: templates/dhcp_setting.php:165
+msgid "These values are managed automatically while Encrypted DNS is active."
+msgstr ""
+
+#: templates/dhcp_setting.php:168
+#, fuzzy
+msgid "DNS provider"
+msgstr "DNSサーバー"
+
+#: templates/dhcp_setting.php:168
+msgid "Custom"
+msgstr ""
+
+#: templates/dhcp_setting.php:169
+msgid "DNS policy"
+msgstr ""
+
+#: templates/dhcp_setting.php:170
+msgid "Advertised DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:171
+#, fuzzy
+msgid "Upstream DNS"
+msgstr "上流のDNSサーバー"
+
+#: templates/dhcp_setting.php:173
+msgid ""
+"Standard DNS uses unencrypted port 53 and may be intercepted or redirected "
+"by the network provider."
+msgstr ""
+
+#: templates/dhcp_setting.php:179
+msgid "Managed by upstream router"
+msgstr ""
+
+#: templates/dhcp_setting.php:179
+msgid "Validated before applying"
+msgstr ""
+
+#: templates/dhcp_setting.php:187
+msgid "Encrypted DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:187
+msgid "Bypass ISP resolvers with DNS over HTTPS"
+msgstr ""
+
+#: templates/dhcp_setting.php:194
+#, fuzzy
+msgid "Resolver protection"
+msgstr "サーバーの場所"
+
+#: templates/dhcp_setting.php:199
+msgid "Use Encrypted DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:200
+msgid ""
+"OpenAP remains the DNS server for hotspot clients and encrypts upstream "
+"queries. Apply the selection with the button below."
+msgstr ""
+
+#: templates/dhcp_setting.php:209
+msgid "Provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:217
+msgid "Standard DNS"
+msgstr ""
+
+#: templates/dhcp_setting.php:220
+#, fuzzy
+msgid "Local endpoint"
+msgstr "地方港"
+
+#: templates/dhcp_setting.php:221
+msgid "Not active"
+msgstr ""
+
+#: templates/dhcp_setting.php:227
+msgid ""
+"Bridge clients use the DNS assigned by the upstream router. This resolver is "
+"configurable but is not enforced on bridged clients."
+msgstr ""
+
+#: templates/dhcp_setting.php:229
+msgid ""
+"dnsmasq forwards only to the local encrypted proxy; system and ISP DNS are "
+"ignored."
+msgstr ""
+
+#: templates/dhcp_setting.php:230
+msgid ""
+"When disabled, OpenAP uses the selected public resolver over standard DNS."
+msgstr ""
+
+#: templates/dhcp_setting.php:236
+msgid "Automatic rollback on validation failure"
+msgstr ""
+
+#: templates/dhcp_setting.php:237
+msgid "Apply DNS provider"
+msgstr ""
+
+#: templates/dhcp_setting.php:262
+msgid "available"
+msgstr ""
+
+#: templates/exception.php:6 templates/exception.php:17
+#, fuzzy
+msgid "OpenAP Exception"
+msgstr "ラズパップ例外"
+
+#: templates/exception.php:20
+msgid "An exception occurred"
+msgstr "例外が発生した"
+
+#: templates/hostapd.php:14 templates/repeater.php:121
+#: templates/wizard_uplink.php:36
+msgid "Hotspot"
+msgstr "ホットスポット"
+
+#: templates/hostapd.php:22
+msgid "Start hotspot"
+msgstr "ホットスポット開始"
+
+#: templates/hostapd.php:22
+msgid "Starting hotspot"
+msgstr "ホットスポットの開始"
+
+#: templates/hostapd.php:26
+msgid "Stop hotspot"
+msgstr "ホットスポットの停止"
+
+#: templates/hostapd.php:29
+msgid "Restart hotspot"
+msgstr "ホットスポットを再起動する"
+
+#: templates/hostapd.php:29
+msgid "Restarting hotspot"
+msgstr "ホットスポットの再起動"
+
+#: templates/hostapd.php:73
+msgid "Information provided by hostapd"
+msgstr "hostapdが提供する情報"
+
+#: templates/hostapd.php:87
+#, fuzzy
+msgid "Executing OpenAP service start"
+msgstr "RaspAPサービス開始の実行"
+
+#: templates/hostapd/advanced.php:2
+msgid "Advanced settings"
+msgstr "詳細設定"
+
+#: templates/hostapd/advanced.php:9
+msgid "Bridged AP mode"
+msgstr "ブリッジAPモード"
+
+#: templates/hostapd/advanced.php:19
+msgid "Bridge interface configuration"
+msgstr "ブリッジ・インターフェース設定"
+
+#: templates/hostapd/advanced.php:21
+msgid ""
+"Configure a static IP address for the <code>br0</code> interface to maintain "
+"connectivity during bridge mode activation."
+msgstr ""
+"<code>br0</code>インターフェースにスタティック IP アドレスを設定し、ブリッジ"
+"モード起動時の接続性を維持します。"
+
+#: templates/hostapd/advanced.php:26
+msgid "Static IP Address"
+msgstr "静的IPアドレス"
+
+#: templates/hostapd/advanced.php:32 templates/hostapd/advanced.php:58
+#: templates/hostapd/advanced.php:71
+msgid "Please enter a valid IPv4 address"
+msgstr "有効なIPv4アドレスを入力してください。"
+
+#: templates/hostapd/advanced.php:35
+msgid "Example: 192.168.1.100"
+msgstr "例：192.168.1.100"
+
+#: templates/hostapd/advanced.php:39
+msgid "Netmask / CIDR"
+msgstr "ネットマスク / CIDR"
+
+#: templates/hostapd/advanced.php:45
+msgid "Please enter a valid netmask"
+msgstr "有効なネットマスクを入力してください。"
+
+#: templates/hostapd/advanced.php:48
+msgid "CIDR notation (e.g., 24 for 255.255.255.0)"
+msgstr "CIDR表記（例：255.255.255.0なら24）"
+
+#: templates/hostapd/advanced.php:61
+msgid "Your router's IP address"
+msgstr "ルーターのIPアドレス"
+
+#: templates/hostapd/advanced.php:65
+msgid "DNS Server"
+msgstr "DNSサーバー"
+
+#: templates/hostapd/advanced.php:74
+msgid "Usually same as gateway"
+msgstr "通常はゲートウェイと同じ"
+
+#: templates/hostapd/advanced.php:89
+msgid "WiFi client AP mode"
+msgstr "WiFiクライアントAPモード"
+
+#: templates/hostapd/advanced.php:98
+msgid "Hide SSID in broadcast"
+msgstr "ブロードキャストでSSIDを隠す"
+
+#: templates/hostapd/advanced.php:107
+msgid "Beacon interval"
+msgstr "ビーコン間隔"
+
+#: templates/hostapd/advanced.php:119
+msgid "Disable <code>disassoc_low_ack</code>"
+msgstr "<code>disassoc_low_ack を</code>無効にする<code>。</code>"
+
+#: templates/hostapd/advanced.php:122
+msgid "Do not disassociate stations based on excessive transmission failures."
+msgstr "過度の送信失敗に基づいてステーションを切り離さないでください。"
+
+#: templates/hostapd/advanced.php:128
+msgid "Transmit power (dBm)"
+msgstr "送信電力 (dBm)"
+
+#: templates/hostapd/advanced.php:129
+msgid ""
+"dBm is a unit of level used to indicate that a power ratio is expressed in "
+"decibels (dB) with reference to one milliwatt (mW). 30 dBm is equal to 1000 "
+"mW, while 0 dBm equals 1.25 mW."
+msgstr ""
+"dBmは、電力比が1ミリワット（mW）を基準としたデシベル（dB）で表されることを示"
+"すために使われるレベルの単位。30 dBmは1000 mWに等しく、0 dBmは1.25 mWに等し"
+"い。"
+
+#: templates/hostapd/advanced.php:131
+msgid ""
+"Sets the <code>txpower</code> option for the AP interface and the configured "
+"country."
+msgstr ""
+"AP インターフェースと設定されている国の<code>txpower</code>オプションを設定し"
+"ます。"
+
+#: templates/hostapd/advanced.php:137
+msgid "Maximum number of clients"
+msgstr "最大クライアント数"
+
+#: templates/hostapd/advanced.php:139
+msgid ""
+"Configures the <code>max_num_sta</code> option of hostapd. The default and "
+"maximum is 2007. If empty or 0, the default applies."
+msgstr ""
+"hostapd の<code>max_num_sta</code>オプションを設定する。デフォルトと最大値は "
+"2007 です。空または 0 の場合はデフォルトが適用される。"
+
+#: templates/hostapd/advanced.php:144
+msgid "Country Code"
+msgstr "国コード"
+
+#: templates/hostapd/basic.php:2
+msgid "Basic settings"
+msgstr "基本設定"
+
+#: templates/hostapd/basic.php:19
+msgid "Please provide a valid SSID."
+msgstr "有効なSSIDを入力してください。"
+
+#: templates/hostapd/basic.php:30
+#, fuzzy
+msgid "Wi-Fi band"
+msgstr "Wi-Fiコネクト"
+
+#: templates/hostapd/basic.php:32
+msgid "2.4 GHz — longer range and widest compatibility"
+msgstr ""
+
+#: templates/hostapd/basic.php:33
+msgid "5 GHz — higher speed and less interference"
+msgstr ""
+
+#: templates/hostapd/basic.php:40
+#, fuzzy
+msgid "Wireless mode"
+msgstr "ワイヤレス・モード"
+
+#: templates/hostapd/basic.php:42
+msgid "The wireless mode follows the selected band automatically."
+msgstr ""
+
+#: templates/hostapd/basic.php:47 templates/wifi_hotspot.php:66
+#, fuzzy
+msgid "Channel width"
+msgstr "チャンネル"
+
+#: templates/hostapd/basic.php:49
+msgid ""
+"OpenAP defaults to 20 MHz after a channel change. Wider compatible widths "
+"remain available."
+msgstr ""
+
+#: templates/hostapd/basic.php:54 templates/hostapd/basic.php:77
+#: templates/repeater.php:81 templates/repeater.php:130
+#: templates/wizard_repeater.php:53 templates/wizard_uplink.php:88
+msgid "Channel"
+msgstr "チャンネル"
+
+#: templates/hostapd/basic.php:57
+msgid "Loading channels supported by this adapter..."
+msgstr ""
+
+#: templates/hostapd/basic.php:62
+msgid ""
+"Changing band, mode, width or channel restarts the hotspot. Connected Wi-Fi "
+"devices must reconnect afterward."
+msgstr ""
+
+#: templates/hostapd/basic.php:68
+msgid ""
+"Wireless standards which are not compatible with your adapter may be disabled"
+msgstr ""
+"お使いのアダプタと互換性のないワイヤレス規格は無効になる場合があります。"
+
+#: templates/hostapd/basic.php:71
+#, php-format
+msgid "Based on the selected interface, 802.11%s is suggested."
+msgstr "選択されたインターフェイスに基づき、802.11%s。"
+
+#: templates/hostapd/logging.php:4
+msgid "Enable this option to log <code>hostapd</code> activity."
+msgstr ""
+"<code>hostapdの</code>動作をログに記録するには、このオプションを有効にする。"
+
+#: templates/hostapd/logging.php:9
+msgid "Logfile output"
+msgstr "ログファイル出力"
+
+#: templates/hostapd/logging.php:10
+msgid "Clear log"
+msgstr "クリアログ"
+
+#: templates/hostapd/security.php:2
+msgid "Security settings"
+msgstr "セキュリティ設定"
+
+#: templates/hostapd/security.php:6
+msgid "Security type"
+msgstr "セキュリティ・タイプ"
+
+#: templates/hostapd/security.php:10
+msgid "Encryption Type"
+msgstr "暗号化タイプ"
+
+#: templates/hostapd/security.php:14
+msgid "802.11w"
+msgstr "802.11w"
+
+#: templates/hostapd/security.php:15
+msgid ""
+"802.11w extends strong cryptographic protection to a select set of robust "
+"management frames, including Deauthentication, Disassociation and certain "
+"categories of Action Management frames. Collectively, this is known as "
+"Management Frame Protection (MFP)."
+msgstr ""
+"802.11w は、Deauthentication、Disassociation、Action Management frames の特定"
+"のカテゴリを含む、強固な管理フレームに強力な暗号保護を拡張します。総称して、"
+"これは管理フレーム保護（MFP）として知られています。"
+
+#: templates/hostapd/security.php:19
+msgid "Pre-shared key (PSK)"
+msgstr "事前共有鍵（PSK）"
+
+#: templates/hostapd/security.php:24
+msgid "Please provide a valid PSK."
+msgstr "有効なPSKを入力してください。"
+
+#: templates/hostapd/security.php:32
+#, php-format
+msgid "Scan this QR code directly or %s %sprint a sign%s for your users."
+msgstr "このQRコードを直接スキャンするか、 %s %s、ユーザーのためにサイン%s。"
+
+#: templates/logging.php:32
+msgid "Service diagnostics and system events"
+msgstr ""
+
+#: templates/logging.php:33
+msgid "Read only"
+msgstr ""
+
+#: templates/logging.php:36
+#, fuzzy
+msgid "Service logs"
+msgstr "デバイス"
+
+#: templates/logging.php:44
+msgid "Latest 240 journal entries"
+msgstr ""
+
+#: templates/logging.php:44
+msgid "Copy log"
+msgstr ""
+
+#: templates/openap_service_status.php:36
+#, fuzzy
+msgid "Service status"
+msgstr "サーバー設定"
+
+#: templates/openap_service_status.php:37
+#, fuzzy
+msgid "Core OpenAP services"
+msgstr "RestAPIサービスの停止"
+
+#: templates/openap_service_status.php:51
+msgid "Runtime monitored"
+msgstr ""
+
+#: templates/openap_service_status.php:52
+#, fuzzy
+msgid "services"
+msgstr "デバイス"
+
+#: templates/repeater.php:16
+#, fuzzy
+msgid "Refresh status"
+msgstr "RestAPIのステータス"
+
+#: templates/repeater.php:19
+#, fuzzy
+msgid "Restart uplink"
+msgstr "lighttpdを再起動する"
+
+#: templates/repeater.php:21
+msgid "Opening"
+msgstr ""
+
+#: templates/repeater.php:26
+#, fuzzy
+msgid "Restart AP"
+msgstr "レストアピーアイ"
+
+#: templates/repeater.php:29
+msgid "Restart DHCP"
+msgstr ""
+
+#: templates/repeater.php:36
+#, fuzzy
+msgid "Role configuration"
+msgstr "コンフィギュレーション"
+
+#: templates/repeater.php:40
+msgid "Profile"
+msgstr ""
+
+#: templates/repeater.php:41
+msgid "AP role"
+msgstr ""
+
+#: templates/repeater.php:42
+msgid "Uplink role"
+msgstr ""
+
+#: templates/repeater.php:43
+msgid "Role validation"
+msgstr ""
+
+#: templates/repeater.php:51
+msgid "Ethernet"
+msgstr "イーサネット"
+
+#: templates/repeater.php:54
+msgid "Carrier"
+msgstr ""
+
+#: templates/repeater.php:67
+msgid "No ethernet interfaces found."
+msgstr ""
+
+#: templates/repeater.php:78 templates/wizard_repeater.php:50
+msgid "Type"
+msgstr ""
+
+#: templates/repeater.php:79 templates/wizard_repeater.php:51
+msgid "Phy"
+msgstr ""
+
+#: templates/repeater.php:83 templates/wizard_repeater.php:55
+msgid "Managed"
+msgstr ""
+
+#: templates/repeater.php:95 templates/repeater.php:96
+#: templates/wizard_repeater.php:67 templates/wizard_repeater.php:68
+msgid "yes"
+msgstr ""
+
+#: templates/repeater.php:95 templates/repeater.php:96
+#: templates/wizard_repeater.php:67 templates/wizard_repeater.php:68
+msgid "no"
+msgstr ""
+
+#: templates/repeater.php:109 templates/repeater.php:125
+#: templates/system.php:132
+#, fuzzy
+msgid "Service"
+msgstr "装置"
+
+#: templates/repeater.php:113 templates/repeater.php:129
+msgid "Frequency"
+msgstr ""
+
+#: templates/repeater.php:115
+msgid "Link speed"
+msgstr ""
+
+#: templates/repeater.php:128 templates/wizard_ap_ethernet.php:35
+#: templates/wizard_ap_ethernet.php:86
+#, fuzzy
+msgid "Mode"
+msgstr "ダークモード"
+
+#: templates/repeater.php:137
+#, fuzzy
+msgid "Client network"
+msgstr "顧客リスト"
+
+#: templates/repeater.php:140
+#, fuzzy
+msgid "Subnet"
+msgstr "サブネットマスク"
+
+#: templates/repeater.php:142
+#, fuzzy
+msgid "DHCP range"
+msgstr "DHCPサーバー"
+
+#: templates/repeater.php:143
+#, fuzzy
+msgid "dnsmasq"
+msgstr "dnsmasqを停止する"
+
+#: templates/repeater.php:144
+msgid "nftables"
+msgstr ""
+
+#: templates/repeater.php:145
+msgid "IPv4 forwarding"
+msgstr ""
+
+#: templates/repeater.php:146
+msgid "NAT"
+msgstr ""
+
+#: templates/repeater.php:152
+msgid ""
+"Information provided by hostapd, wpa_supplicant, dnsmasq, nftables and "
+"systemd."
+msgstr ""
+
+#: templates/system.php:16
+#, fuzzy
+msgid "WiFi access point"
+msgstr "WiFiクライアント"
+
+#: templates/system.php:17
+msgid "DHCP + DNS"
+msgstr ""
+
+#: templates/system.php:19
+#, fuzzy
+msgid "NAT / Firewall"
+msgstr "ファイアウォール"
+
+#: templates/system.php:20
+#, fuzzy
+msgid "Web server"
+msgstr "ウェブサーバーポート"
+
+#: templates/system.php:21
+#, fuzzy
+msgid "Network backend"
+msgstr "ネットワーク機器"
+
+#: templates/system.php:33
+msgid "Device information and diagnostics"
+msgstr ""
+
+#: templates/system.php:37 templates/system.php:280
+msgid "Reboot"
+msgstr "リブート"
+
+#: templates/system.php:40
+msgid "Refresh"
+msgstr "リフレッシュ"
+
+#: templates/system.php:51
+#, fuzzy
+msgid "OpenAP diagnostics"
+msgstr "診断"
+
+#: templates/system.php:57
+#, fuzzy
+msgid "Operating mode"
+msgstr "ソースの更新"
+
+#: templates/system.php:65
+msgid "CPU Load"
+msgstr "CPU負荷"
+
+#: templates/system.php:70
+#, fuzzy
+msgid "Memory"
+msgstr "使用メモリ"
+
+#: templates/system.php:90
+msgid "Operating System"
+msgstr ""
+
+#: templates/system.php:94
+msgid "OS"
+msgstr "OS"
+
+#: templates/system.php:95
+msgid "Kernel"
+msgstr "カーネル"
+
+#: templates/system.php:96
+msgid "Architecture"
+msgstr ""
+
+#: templates/system.php:97
+msgid "Container"
+msgstr ""
+
+#: templates/system.php:98
+msgid "CPU cores"
+msgstr ""
+
+#: templates/system.php:100
+#, fuzzy
+msgid "System time"
+msgstr "システム時間"
+
+#: templates/system.php:109
+#, fuzzy
+msgid "Network Profile"
+msgstr "ネットワーク機器"
+
+#: templates/system.php:126
+#, fuzzy
+msgid "Services"
+msgstr "デバイス"
+
+#: templates/system.php:134
+#, fuzzy
+msgid "Enabled"
+msgstr "ピアを有効にする"
+
+#: templates/system.php:135
+#, fuzzy
+msgid "Active since"
+msgstr "アクティブなDHCPリース"
+
+#: templates/system.php:157
+msgid "Project Software"
+msgstr ""
+
+#: templates/system.php:178
+#, fuzzy
+msgid "Configuration Files"
+msgstr "設定ファイル"
+
+#: templates/system.php:187
+msgid "Readable"
+msgstr ""
+
+#: templates/system.php:187
+msgid "Missing"
+msgstr ""
+
+#: templates/system.php:200
+#, fuzzy
+msgid "Read-only information provided by OpenAP system diagnostics."
+msgstr "vnstatが提供する情報"
+
+#: templates/system.php:236
+#, fuzzy
+msgid "Network profile"
+msgstr "ネットワーク機器"
+
+#: templates/system.php:237
+msgid "Current OpenAP mode"
+msgstr ""
+
+#: templates/system.php:242
+#, fuzzy
+msgid "Active mode"
+msgstr "アクティベート"
+
+#: templates/system.php:267
+#, fuzzy
+msgid "Reboot system"
+msgstr "リブート"
+
+#: templates/system.php:272
+msgid ""
+"OpenAP and its network services will be temporarily unavailable while the "
+"system restarts."
+msgstr ""
+
+#: templates/wifi_hotspot.php:25 templates/wifi_hotspot.php:39
+#, fuzzy
+msgid "Wireless access point status"
+msgstr "ワイヤレスクライアントインターフェース"
+
+#: templates/wifi_hotspot.php:47
+#, fuzzy
+msgid "Wireless access point"
+msgstr "ワイヤレスクライアントインターフェース"
+
+#: templates/wizard_ap_ethernet.php:32
+#, fuzzy
+msgid "AP Ethernet active"
+msgstr "イーサネット"
+
+#: templates/wizard_ap_ethernet.php:33
+#, fuzzy
+msgid "Ethernet uplink configured on"
+msgstr "未設定"
+
+#: templates/wizard_ap_ethernet.php:35 templates/wizard_ap_ethernet.php:51
+msgid "Routed / NAT"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:36 templates/wizard_ap_ethernet.php:77
+#, fuzzy
+msgid "Management gateway"
+msgstr "デフォルトゲートウェイ"
+
+#: templates/wizard_ap_ethernet.php:38
+msgid "Waiting for hotspot state before refreshing dashboard..."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:46
+#, fuzzy
+msgid "Network mode"
+msgstr "ネットワーク機器"
+
+#: templates/wizard_ap_ethernet.php:51
+msgid "OpenAP DHCP and isolated subnet"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:56
+msgid "Same LAN and DHCP as Ethernet"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:59
+msgid ""
+"WiFi clients will receive addresses, gateway and DNS directly from the "
+"upstream router. The management gateway below applies only to the OpenAP "
+"host."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:78
+msgid "OpenAP host default route"
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:85
+#, fuzzy
+msgid "Detected"
+msgstr "切断"
+
+#: templates/wizard_ap_ethernet.php:91
+msgid "Saving..."
+msgstr ""
+
+#: templates/wizard_ap_ethernet.php:102
+msgid "AP traffic routed via ethernet uplink."
+msgstr ""
+
+#: templates/wizard_repeater.php:6
+#, fuzzy
+msgid "Repeater setup"
+msgstr "リピーター"
+
+#: templates/wizard_repeater.php:14
+msgid "Two WiFi interfaces detected. Repeater setup is available."
+msgstr ""
+
+#: templates/wizard_repeater.php:16
+msgid "Repeater setup needs two WiFi interfaces with AP and managed support."
+msgstr ""
+
+#: templates/wizard_repeater.php:23
+msgid "Selected AP"
+msgstr ""
+
+#: templates/wizard_repeater.php:32
+msgid "Selected uplink"
+msgstr ""
+
+#: templates/wizard_repeater.php:43
+#, fuzzy
+msgid "WiFi interfaces"
+msgstr "インターフェース"
+
+#: templates/wizard_repeater.php:72
+#, fuzzy
+msgid "No WiFi interfaces found."
+msgstr "Wifiステーションが見つからない"
+
+#: templates/wizard_repeater.php:83
+msgid "Switching"
+msgstr ""
+
+#: templates/wizard_repeater.php:85
+#, fuzzy
+msgid "Configure repeater"
+msgstr "アップデートの設定"
+
+#: templates/wizard_repeater.php:90
+msgid "Repeater traffic will use the selected WiFi uplink."
+msgstr ""
+
+#: templates/wizard_uplink.php:8
+msgid "Uplink setup"
+msgstr ""
+
+#: templates/wizard_uplink.php:10 templates/wizard_uplink.php:66
+msgid "Scan"
+msgstr ""
+
+#: templates/wizard_uplink.php:27
+#, fuzzy
+msgid "Repeater connected successfully"
+msgstr "ファイル \"%s\" 削除成功"
+
+#: templates/wizard_uplink.php:28
+msgid "Hotspot traffic now uses the selected WiFi uplink."
+msgstr ""
+
+#: templates/wizard_uplink.php:33
+msgid "Uplink network"
+msgstr ""
+
+#: templates/wizard_uplink.php:34
+#, fuzzy
+msgid "Uplink address"
+msgstr "エンドポイントアドレス"
+
+#: templates/wizard_uplink.php:48
+msgid "Done"
+msgstr ""
+
+#: templates/wizard_uplink.php:55
+msgid "Select a WiFi network below or click Scan to search."
+msgstr ""
+
+#: templates/wizard_uplink.php:57
+msgid "No managed-capable WiFi uplink interface is ready."
+msgstr ""
+
+#: templates/wizard_uplink.php:64
+msgid "Available networks"
+msgstr ""
+
+#: templates/wizard_uplink.php:64
+msgid "Choose an uplink or scan again"
+msgstr ""
+
+#: templates/wizard_uplink.php:79
+#, fuzzy
+msgid "Saved"
+msgstr "セーブ"
+
+#: templates/wizard_uplink.php:82
+#, fuzzy
+msgid "Current uplink"
+msgstr "現在の設定"
+
+#: templates/wizard_uplink.php:96
+msgid "WPA3-only uplinks are not currently supported"
+msgstr ""
+
+#: templates/wizard_uplink.php:97
+msgid "WPA3 unsupported"
+msgstr ""
+
+#: templates/wizard_uplink.php:105 templates/wizard_uplink.php:166
+#, fuzzy
+msgid "Connecting"
+msgstr "接続"
+
+#: templates/wizard_uplink.php:108
+#, fuzzy
+msgid "Reconnect saved"
+msgstr "切断"
+
+#: templates/wizard_uplink.php:108
+#, fuzzy
+msgid "Connect saved"
+msgstr "接続済み"
+
+#: templates/wizard_uplink.php:113
+#, fuzzy
+msgid "Edit saved password"
+msgstr "管理者パスワードの更新"
+
+#: templates/wizard_uplink.php:114
+#, fuzzy
+msgid "Edit password"
+msgstr "旧パスワード"
+
+#: templates/wizard_uplink.php:118
+#, fuzzy
+msgid "Select"
+msgstr "テーマを選ぶ"
+
+#: templates/wizard_uplink.php:126
+msgid "Forget saved network"
+msgstr ""
+
+#: templates/wizard_uplink.php:126
+msgid "Forget"
+msgstr ""
+
+#: templates/wizard_uplink.php:133
+msgid "No networks found. Click Scan to search."
+msgstr ""
+
+#: templates/wizard_uplink.php:136
+#, fuzzy
+msgid "Enter network manually"
+msgstr "手動で作成"
+
+#: templates/wizard_uplink.php:141
+msgid "Uplink credentials"
+msgstr ""
+
+#: templates/wizard_uplink.php:141
+msgid "Connect the selected network"
+msgstr ""
+
+#: templates/wizard_uplink.php:155
+msgid "Select a network or type SSID"
+msgstr ""
+
+#: templates/wizard_uplink.php:168
+msgid "Connect"
+msgstr "接続"
+
+#: templates/wizard_uplink.php:177
+msgid "Uplink credentials are stored in the selected wpa_supplicant profile."
+msgstr ""

@@ -1,0 +1,7 @@
+[Unit]
+Description=OpenAP repeater uplink health and recovery check
+After=network.target openap-uplink.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openap-uplink-watchdog
