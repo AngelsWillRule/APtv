@@ -56,6 +56,10 @@
           <i class="fas fa-shield-alt"></i>
           <span><?php echo _("APtv version 1.0 combines network control and IPTV playback in a single appliance-oriented experience."); ?></span>
         </div>
+        <div class="openap-about-attribution-note openap-info-badge">
+          <i class="fas fa-beer"></i>
+          <span><?php echo _("Enjoying APtv? Support its development with a beer:"); ?> <a href="https://paypal.me/APtvApp" target="_blank" rel="noopener"><?php echo _("Offer me a beer"); ?></a></span>
+        </div>
       </div>
     </section>
   </div>
