@@ -103,6 +103,11 @@ sudo ./aptv-install.sh remove all
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 
+## Support APtv
+
+If APtv is useful to you, you can support its development with a beer:
+[Offer me a beer via PayPal](https://paypal.me/APtvApp).
+
 ## Security and privacy
 
 The dashboard does not enable WAN access by default. Network changes are
