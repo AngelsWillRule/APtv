@@ -1,9 +1,26 @@
 # Changelog
 
-All notable changes to OpenAP are documented in this file.
+All notable changes to APtv are documented in this file.
 
-The project follows semantic versioning. Until a versioned GitHub release is
-published, entries describe validated pre-release candidates from `main`.
+The project follows semantic versioning. The `1.0.0` entry is the first public
+APtv release; older entries describe validated OpenAP pre-release candidates
+that preceded the unified APtv project.
+
+## [1.0.0] - 2026-10-26
+
+### Added
+
+- Published APtv as the unified IPTV and OpenAP application.
+- Added the `aptv-install.sh` entrypoint with `ap`, `iptv` and `both` profiles.
+- Added installation, compatibility, networking, security and troubleshooting
+  documentation for Debian-family systems.
+- Added APtv documentation and PayPal support links to the application UI.
+
+### Validated
+
+- Debian 13, Ubuntu 26.04 and Raspberry Pi OS 64-bit installation paths.
+- OpenAP access-point, Ethernet, routed NAT and repeater workflows.
+- IPTV live, VOD, series, cataloguing and responsive dashboard workflows.
 
 ## [0.2.5.1] - 2026-08-07
 
