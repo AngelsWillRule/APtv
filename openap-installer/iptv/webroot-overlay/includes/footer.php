@@ -6,7 +6,7 @@
     <span class="ps-2"><?php echo _("Unified OpenAP and IPTV platform"); ?></span>
   </div>
   <div class="text-muted">
-    <i class="fas fa-book-reader"></i> <a href="https://angelswillrule.github.io/OpenAP/" target="_blank" rel="noopener"><?php echo _("OpenAP documentation"); ?></a>
+    <i class="fas fa-book-reader"></i> <a href="https://github.com/AngelsWillRule/APtv/tree/main/docs" target="_blank" rel="noopener"><?php echo _("APtv documentation"); ?></a>
   </div>
 </div>
 <?php if (($openapIsLoginPage ?? false) === false): ?>
