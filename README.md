@@ -108,6 +108,9 @@ sudo ./aptv-install.sh remove all
 If APtv is useful to you, you can support its development with a beer:
 [Offer me a beer via PayPal](https://paypal.me/APtvApp).
 
+Follow the official [APtv Telegram channel](https://t.me/APtvTelegram) for
+release announcements and project updates.
+
 ## Security and privacy
 
 The dashboard does not enable WAN access by default. Network changes are

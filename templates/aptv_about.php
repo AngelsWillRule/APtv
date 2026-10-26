@@ -60,6 +60,10 @@
           <i class="fas fa-beer"></i>
           <span><?php echo _("Enjoying APtv? Support its development with a beer:"); ?> <a href="https://paypal.me/APtvApp" target="_blank" rel="noopener"><?php echo _("Offer me a beer"); ?></a></span>
         </div>
+        <div class="openap-about-attribution-note openap-info-badge">
+          <i class="fas fa-paper-plane"></i>
+          <span><?php echo _("Follow the official APtv Telegram channel:"); ?> <a href="https://t.me/APtvTelegram" target="_blank" rel="noopener"><?php echo _("Join the channel"); ?></a></span>
+        </div>
       </div>
     </section>
   </div>
