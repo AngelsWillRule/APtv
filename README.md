@@ -100,6 +100,7 @@ sudo ./aptv-install.sh remove all
 - [Architecture](docs/ARCHITECTURE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Uninstallation](docs/UNINSTALL.md)
+- [APtv screenshots](docs/SCREENSHOTS.md)
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 

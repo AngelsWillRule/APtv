@@ -13,6 +13,7 @@ This directory contains the public user and administrator documentation.
 - [Translations](TRANSLATIONS.md)
 - [Feature roadmap](OPENAP_FEATURE_ROADMAP.md)
 - [Interface design system](OPENAP_INTERFACE_DESIGN_SYSTEM.md)
+- [APtv screenshots](SCREENSHOTS.md)
 
 The public command is always `aptv-install.sh`. Names under
 `openap-installer/` are implementation details and may change independently.
