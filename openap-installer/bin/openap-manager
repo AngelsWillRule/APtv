@@ -334,7 +334,18 @@ case "$command" in
   status) status ;;
   install) require_root; target="${profile_arg:-${1:-}}"; [ -n "${target:-}" ] || { echo 'ERROR: install requires --profile ap|iptv|both.' >&2; exit 1; }; confirm APPLY; install_profile "$target" ;;
   add) require_root; component="${1:-}"; case "$component" in ap|iptv) ;; *) echo 'ERROR: add requires ap or iptv.' >&2; exit 1 ;; esac; confirm APPLY; add_component "$component" ;;
-  remove) require_root; component="${1:-}"; case "$component" in ap|iptv|all) ;; *) echo 'ERROR: remove requires ap, iptv or all.' >&2; exit 1 ;; esac; confirm "REMOVE $([ "$component" = all ] && echo ALL || [ "$component" = ap ] && echo OPENAP || echo IPTV)"; remove_component "$component" ;;
+  remove)
+    require_root
+    component="${1:-}"
+    case "$component" in
+      ap) phrase='REMOVE OPENAP' ;;
+      iptv) phrase='REMOVE IPTV' ;;
+      all) phrase='REMOVE ALL' ;;
+      *) echo 'ERROR: remove requires ap, iptv or all.' >&2; exit 1 ;;
+    esac
+    confirm "$phrase"
+    remove_component "$component"
+    ;;
   repair) require_root; confirm APPLY; repair ;;
   -h|--help) usage ;;
   *) echo "Unknown command: $command" >&2; usage >&2; exit 1 ;;
